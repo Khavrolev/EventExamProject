@@ -1,0 +1,16 @@
+# .NET build output
+bin/
+obj/
+
+# JetBrains Rider
+.idea/
+
+# Visual Studio
+.vs/
+*.user
+
+# macOS
+.DS_Store
+
+# NuGet
+*.nupkg
