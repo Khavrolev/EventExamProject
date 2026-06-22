@@ -6,16 +6,16 @@ namespace EventExamProject.Services;
 
 public class EventService :IEventService
 {
-    private static List<Event> Events { get; } = [];
+    private readonly List<Event> _events = [];
     
     public Task<List<Event>> GetAllEvents()
     {
-        return Task.FromResult(Events);
+        return Task.FromResult(_events);
     }
 
     public Task<Event?> GetEventById(Guid id)
     {
-        return Task.FromResult(Events.Find(e => e.Id.Equals(id) ));
+        return Task.FromResult(_events.Find(e => e.Id.Equals(id) ));
     }
     
     public Task<Event> AddEvent(EventDto newEvent)
@@ -28,7 +28,7 @@ public class EventService :IEventService
             StartAt = newEvent.StartAt,
             EndAt = newEvent.EndAt
         };  
-        Events.Add(newEventEntity);
+        _events.Add(newEventEntity);
         
         return Task.FromResult(newEventEntity);
 
@@ -36,7 +36,7 @@ public class EventService :IEventService
 
     public Task<Event?> UpdateEvent(Guid id, EventDto updatedEvent)
     {
-        var index = Events.FindIndex(e => e.Id.Equals(id));
+        var index = _events.FindIndex(e => e.Id.Equals(id));
         
         if (index == -1)
         {
@@ -51,21 +51,21 @@ public class EventService :IEventService
             StartAt = updatedEvent.StartAt,
             EndAt = updatedEvent.EndAt
         };
-        Events[index] = updatedEntity;
+        _events[index] = updatedEntity;
         
         return Task.FromResult<Event?>(updatedEntity);
     }
 
     public Task<bool> DeleteEvent(Guid id)
     {
-        var eventToDelete = Events.Find(e => e.Id.Equals(id));
+        var eventToDelete = _events.Find(e => e.Id.Equals(id));
         
         if (eventToDelete == null)
         {
             return Task.FromResult(false);
         }
         
-        Events.Remove(eventToDelete);
+        _events.Remove(eventToDelete);
         
         return Task.FromResult(true);
     }
