@@ -20,11 +20,6 @@ public class EventsController(IEventService eventService) : ControllerBase
     {
         var eventById = await eventService.GetEventById(id);
         
-        if (eventById == null)
-        {
-            return NotFound();
-        }
-        
         return Ok(eventById);
     }
 
@@ -44,11 +39,6 @@ public class EventsController(IEventService eventService) : ControllerBase
     {
         var updated = await eventService.UpdateEvent(id, newEvent);
         
-        if (updated == null)
-        {
-            return NotFound();
-        }
-        
         return Ok(updated);
     }
 
@@ -56,12 +46,7 @@ public class EventsController(IEventService eventService) : ControllerBase
     public async Task<ActionResult> DeleteEvent(Guid id)
     {
         var deleted = await eventService.DeleteEvent(id);
-
-        if (!deleted)
-        {
-            return NotFound();
-        }
-
+        
         return NoContent();
     }
 }

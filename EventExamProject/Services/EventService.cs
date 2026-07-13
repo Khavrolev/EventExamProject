@@ -1,4 +1,5 @@
 using EventExamProject.DTOs;
+using EventExamProject.Exceptions;
 using EventExamProject.Models;
 using EventExamProject.Services.Interfaces;
 
@@ -13,9 +14,12 @@ public class EventService :IEventService
         return Task.FromResult(_events);
     }
 
-    public Task<Event?> GetEventById(Guid id)
+    public Task<Event> GetEventById(Guid id)
     {
-        return Task.FromResult(_events.Find(e => e.Id.Equals(id) ));
+        var foundEvent = _events.Find(e => e.Id.Equals(id));
+
+        return foundEvent == null ? throw new NotFoundException($"Event with id {id} was not found") : Task.FromResult(foundEvent);
+
     }
     
     public Task<Event> AddEvent(EventDto newEvent)
@@ -34,13 +38,13 @@ public class EventService :IEventService
 
     }
 
-    public Task<Event?> UpdateEvent(Guid id, EventDto updatedEvent)
+    public Task<Event> UpdateEvent(Guid id, EventDto updatedEvent)
     {
         var index = _events.FindIndex(e => e.Id.Equals(id));
         
         if (index == -1)
         {
-            return Task.FromResult<Event?>(null);
+            throw new NotFoundException($"Event with id {id} was not found");
         }
 
         var updatedEntity = new Event
@@ -53,7 +57,7 @@ public class EventService :IEventService
         };
         _events[index] = updatedEntity;
         
-        return Task.FromResult<Event?>(updatedEntity);
+        return Task.FromResult(updatedEntity);
     }
 
     public Task<bool> DeleteEvent(Guid id)
