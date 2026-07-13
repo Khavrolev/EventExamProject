@@ -9,9 +9,26 @@ public class EventService :IEventService
 {
     private readonly List<Event> _events = [];
     
-    public Task<List<Event>> GetAllEvents()
+    public Task<List<Event>> GetAllEvents(EventFilterDto filter)
     {
-        return Task.FromResult(_events);
+        var filtered = _events.AsEnumerable();
+        
+        if (!string.IsNullOrEmpty(filter.Title))
+        {
+            filtered = filtered.Where(e => e.Title.Contains(filter.Title, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (filter.From.HasValue)
+        {
+            filtered = filtered.Where(e=>e.StartAt >= filter.From);
+        }
+        
+        if (filter.To.HasValue)
+        {
+            filtered = filtered.Where(e=>e.EndAt <= filter.To);
+        }
+
+        return Task.FromResult(filtered.ToList());
     }
 
     public Task<Event> GetEventById(Guid id)

@@ -10,9 +10,10 @@ namespace EventExamProject.Controllers;
 public class EventsController(IEventService eventService) : ControllerBase
 {
     [HttpGet]
-    public async Task<ActionResult<List<Event>>> GetAllEvents()
+    public async Task<ActionResult<List<Event>>> GetAllEvents(
+        [FromQuery] EventFilterDto filter)
     {
-        return Ok(await eventService.GetAllEvents());
+        return Ok(await eventService.GetAllEvents(filter));
     }
     
     [HttpGet("{id:Guid}")]
