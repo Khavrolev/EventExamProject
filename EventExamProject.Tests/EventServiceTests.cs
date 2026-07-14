@@ -3,6 +3,7 @@ using EventExamProject.DTOs.Event;
 using EventExamProject.DTOs.Pagination;
 using EventExamProject.Exceptions;
 using EventExamProject.Services;
+using FluentAssertions;
 
 namespace EventExamProject.Tests;
 
@@ -25,10 +26,10 @@ public class EventServiceTests
 
         var created = await service.AddEvent(dto);
 
-        Assert.NotEqual(Guid.Empty, created.Id);
-        Assert.Equal(dto.Title, created.Title);
-        Assert.Equal(dto.StartAt, created.StartAt);
-        Assert.Equal(dto.EndAt, created.EndAt);
+        created.Id.Should().NotBe(Guid.Empty);
+        created.Title.Should().Be(dto.Title);
+        created.StartAt.Should().Be(dto.StartAt);
+        created.EndAt.Should().Be(dto.EndAt);
     }
 
     [Fact]
@@ -40,8 +41,8 @@ public class EventServiceTests
 
         var result = await service.GetAllEvents(new EventFilterDto(), new PaginationParams());
 
-        Assert.Equal(2, result.TotalCount);
-        Assert.Equal(2, result.Data.Count);
+        result.TotalCount.Should().Be(2);
+        result.Data.Should().HaveCount(2);
     }
 
     [Fact]
@@ -52,8 +53,8 @@ public class EventServiceTests
 
         var found = await service.GetEventById(created.Id);
 
-        Assert.Equal(created.Id, found.Id);
-        Assert.Equal(created.Title, found.Title);
+        found.Id.Should().Be(created.Id);
+        found.Title.Should().Be(created.Title);
     }
 
     [Fact]
@@ -65,8 +66,8 @@ public class EventServiceTests
 
         var updated = await service.UpdateEvent(created.Id, updateDto);
 
-        Assert.Equal(created.Id, updated.Id);
-        Assert.Equal("New title", updated.Title);
+        updated.Id.Should().Be(created.Id);
+        updated.Title.Should().Be("New title");
     }
 
     [Fact]
@@ -77,8 +78,9 @@ public class EventServiceTests
 
         var deleted = await service.DeleteEvent(created.Id);
 
-        Assert.True(deleted);
-        await Assert.ThrowsAsync<NotFoundException>(() => service.GetEventById(created.Id));
+        deleted.Should().BeTrue();
+        await FluentActions.Awaiting(() => service.GetEventById(created.Id))
+            .Should().ThrowAsync<NotFoundException>();
     }
 
     [Fact]
@@ -91,8 +93,8 @@ public class EventServiceTests
 
         var result = await service.GetAllEvents(new EventFilterDto { Title = "team" }, new PaginationParams());
 
-        Assert.Equal(2, result.TotalCount);
-        Assert.All(result.Data, e => Assert.Contains("team", e.Title, StringComparison.OrdinalIgnoreCase));
+        result.TotalCount.Should().Be(2);
+        result.Data.Should().OnlyContain(e => e.Title.Contains("team", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -107,8 +109,7 @@ public class EventServiceTests
         var filter = new EventFilterDto { From = baseDate.AddDays(2), To = baseDate.AddDays(7) };
         var result = await service.GetAllEvents(filter, new PaginationParams());
 
-        Assert.Equal(1, result.TotalCount);
-        Assert.Equal("Middle", result.Data.Single().Title);
+        result.Data.Should().ContainSingle().Which.Title.Should().Be("Middle");
     }
 
     [Fact]
@@ -122,10 +123,10 @@ public class EventServiceTests
 
         var result = await service.GetAllEvents(new EventFilterDto(), new PaginationParams { Page = 2, PageSize = 2 });
 
-        Assert.Equal(5, result.TotalCount);
-        Assert.Equal(2, result.Page);
-        Assert.Equal(2, result.PageSize);
-        Assert.Equal(["Event 3", "Event 4"], result.Data.Select(e => e.Title));
+        result.TotalCount.Should().Be(5);
+        result.Page.Should().Be(2);
+        result.PageSize.Should().Be(2);
+        result.Data.Select(e => e.Title).Should().Equal("Event 3", "Event 4");
     }
 
     [Fact]
@@ -140,8 +141,67 @@ public class EventServiceTests
         var filter = new EventFilterDto { Title = "team", From = baseDate.AddDays(-1), To = baseDate.AddDays(2) };
         var result = await service.GetAllEvents(filter, new PaginationParams());
 
-        Assert.Equal(1, result.TotalCount);
-        Assert.Equal("Team Meeting", result.Data.Single().Title);
+        result.Data.Should().ContainSingle().Which.Title.Should().Be("Team Meeting");
+    }
+
+    [Fact]
+    public async Task GetAllEvents_ShouldReturnAllEvents_WhenTitleFilterIsEmptyString()
+    {
+        var service = new EventService();
+        await service.AddEvent(CreateValidDto("Event 1"));
+        await service.AddEvent(CreateValidDto("Event 2"));
+
+        var result = await service.GetAllEvents(new EventFilterDto { Title = "" }, new PaginationParams());
+
+        result.TotalCount.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task GetAllEvents_ShouldIncludeEvent_WhenStartAtEqualsFromBoundary()
+    {
+        var service = new EventService();
+        var boundary = new DateTime(2026, 8, 1);
+        await service.AddEvent(CreateValidDto("Boundary", boundary, boundary.AddHours(1)));
+
+        var result = await service.GetAllEvents(new EventFilterDto { From = boundary }, new PaginationParams());
+
+        result.Data.Should().ContainSingle().Which.Title.Should().Be("Boundary");
+    }
+
+    [Fact]
+    public async Task GetAllEvents_ShouldIncludeEvent_WhenEndAtEqualsToBoundary()
+    {
+        var service = new EventService();
+        var boundary = new DateTime(2026, 8, 1);
+        await service.AddEvent(CreateValidDto("Boundary", boundary.AddHours(-1), boundary));
+
+        var result = await service.GetAllEvents(new EventFilterDto { To = boundary }, new PaginationParams());
+
+        result.Data.Should().ContainSingle().Which.Title.Should().Be("Boundary");
+    }
+
+    [Fact]
+    public async Task GetAllEvents_ShouldReturnEmptyData_WhenPageExceedsAvailableData()
+    {
+        var service = new EventService();
+        await service.AddEvent(CreateValidDto("Event 1"));
+
+        var result = await service.GetAllEvents(new EventFilterDto(), new PaginationParams { Page = 999, PageSize = 10 });
+
+        result.Data.Should().BeEmpty();
+        result.TotalCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task GetAllEvents_ShouldReturnEmptyData_WhenPageSizeIsZero()
+    {
+        var service = new EventService();
+        await service.AddEvent(CreateValidDto("Event 1"));
+
+        var result = await service.GetAllEvents(new EventFilterDto(), new PaginationParams { Page = 1, PageSize = 0 });
+
+        result.Data.Should().BeEmpty();
+        result.TotalCount.Should().Be(1);
     }
 
     [Fact]
@@ -149,7 +209,8 @@ public class EventServiceTests
     {
         var service = new EventService();
 
-        await Assert.ThrowsAsync<NotFoundException>(() => service.GetEventById(Guid.NewGuid()));
+        await FluentActions.Awaiting(() => service.GetEventById(Guid.NewGuid()))
+            .Should().ThrowAsync<NotFoundException>();
     }
 
     [Fact]
@@ -158,7 +219,8 @@ public class EventServiceTests
         var service = new EventService();
         var dto = CreateValidDto();
 
-        await Assert.ThrowsAsync<NotFoundException>(() => service.UpdateEvent(Guid.NewGuid(), dto));
+        await FluentActions.Awaiting(() => service.UpdateEvent(Guid.NewGuid(), dto))
+            .Should().ThrowAsync<NotFoundException>();
     }
 
     [Fact]
@@ -167,7 +229,8 @@ public class EventServiceTests
         var service = new EventService();
         var invalidDto = CreateValidDto(startAt: new DateTime(2026, 8, 2), endAt: new DateTime(2026, 8, 1));
 
-        await Assert.ThrowsAsync<ValidationException>(() => service.AddEvent(invalidDto));
+        await FluentActions.Awaiting(() => service.AddEvent(invalidDto))
+            .Should().ThrowAsync<ValidationException>();
     }
 
     [Fact]
@@ -177,6 +240,7 @@ public class EventServiceTests
         var created = await service.AddEvent(CreateValidDto());
         var invalidDto = CreateValidDto(startAt: new DateTime(2026, 8, 2), endAt: new DateTime(2026, 8, 1));
 
-        await Assert.ThrowsAsync<ValidationException>(() => service.UpdateEvent(created.Id, invalidDto));
+        await FluentActions.Awaiting(() => service.UpdateEvent(created.Id, invalidDto))
+            .Should().ThrowAsync<ValidationException>();
     }
 }
