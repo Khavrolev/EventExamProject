@@ -1,4 +1,6 @@
 using EventExamProject.DTOs;
+using EventExamProject.DTOs.Event;
+using EventExamProject.DTOs.Pagination;
 using EventExamProject.Models;
 using EventExamProject.Services.Interfaces;
 using Microsoft.AspNetCore.Mvc;
@@ -10,20 +12,17 @@ namespace EventExamProject.Controllers;
 public class EventsController(IEventService eventService) : ControllerBase
 {
     [HttpGet]
-    public async Task<ActionResult<List<Event>>> GetAllEvents()
+    public async Task<ActionResult<List<Event>>> GetAllEvents(
+        [FromQuery] EventFilterDto filter,
+        [FromQuery] PaginationParams paginationParams)
     {
-        return Ok(await eventService.GetAllEvents());
+        return Ok(await eventService.GetAllEvents(filter, paginationParams));
     }
     
     [HttpGet("{id:Guid}")]
     public async Task<ActionResult<Event>> GetEventById(Guid id)
     {
         var eventById = await eventService.GetEventById(id);
-        
-        if (eventById == null)
-        {
-            return NotFound();
-        }
         
         return Ok(eventById);
     }
@@ -44,11 +43,6 @@ public class EventsController(IEventService eventService) : ControllerBase
     {
         var updated = await eventService.UpdateEvent(id, newEvent);
         
-        if (updated == null)
-        {
-            return NotFound();
-        }
-        
         return Ok(updated);
     }
 
@@ -56,12 +50,7 @@ public class EventsController(IEventService eventService) : ControllerBase
     public async Task<ActionResult> DeleteEvent(Guid id)
     {
         var deleted = await eventService.DeleteEvent(id);
-
-        if (!deleted)
-        {
-            return NotFound();
-        }
-
+        
         return NoContent();
     }
 }

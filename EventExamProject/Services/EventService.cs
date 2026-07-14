@@ -1,25 +1,69 @@
+using System.ComponentModel.DataAnnotations;
 using EventExamProject.DTOs;
+using EventExamProject.DTOs.Event;
+using EventExamProject.DTOs.Pagination;
+using EventExamProject.Exceptions;
 using EventExamProject.Models;
+using EventExamProject.Resources;
 using EventExamProject.Services.Interfaces;
 
 namespace EventExamProject.Services;
 
 public class EventService :IEventService
 {
-    private static List<Event> Events { get; } = [];
-    
-    public Task<List<Event>> GetAllEvents()
+    private readonly List<Event> _events = [];
+
+    private static void ValidateDates(EventDto dto)
     {
-        return Task.FromResult(Events);
+        if (dto.EndAt <= dto.StartAt)
+        {
+            throw new ValidationException(ValidationMessages.EndAtAfterStartAt);
+        }
+    }
+    
+    public Task<PaginatedResult<Event>> GetAllEvents(EventFilterDto filter, PaginationParams paginationParams)
+    {
+        var filtered = _events.AsEnumerable();
+        
+        if (!string.IsNullOrEmpty(filter.Title))
+        {
+            filtered = filtered.Where(e => e.Title.Contains(filter.Title, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (filter.From.HasValue)
+        {
+            filtered = filtered.Where(e=>e.StartAt >= filter.From);
+        }
+        
+        if (filter.To.HasValue)
+        {
+            filtered = filtered.Where(e=>e.EndAt <= filter.To);
+        }
+        
+        var filteredList = filtered.ToList();
+
+        var paginated = filteredList
+            .Skip((paginationParams.Page - 1) * paginationParams.PageSize)
+            .Take(paginationParams.PageSize)
+            .ToList();
+
+        return Task.FromResult(new PaginatedResult<Event> {
+            Data = paginated, TotalCount = filteredList.Count(), Page = paginationParams.Page, PageSize = paginationParams.PageSize
+        });
     }
 
-    public Task<Event?> GetEventById(Guid id)
+    public Task<Event> GetEventById(Guid id)
     {
-        return Task.FromResult(Events.Find(e => e.Id.Equals(id) ));
+        var foundEvent = _events.Find(e => e.Id.Equals(id));
+
+        return foundEvent == null ? throw new NotFoundException($"Event with id {id} was not found") : Task.FromResult(foundEvent);
+
     }
     
     public Task<Event> AddEvent(EventDto newEvent)
     {
+        ValidateDates(newEvent);
+
         var newEventEntity = new Event
         {
             Id = Guid.NewGuid(),
@@ -28,20 +72,22 @@ public class EventService :IEventService
             StartAt = newEvent.StartAt,
             EndAt = newEvent.EndAt
         };  
-        Events.Add(newEventEntity);
+        _events.Add(newEventEntity);
         
         return Task.FromResult(newEventEntity);
 
     }
 
-    public Task<Event?> UpdateEvent(Guid id, EventDto updatedEvent)
+    public Task<Event> UpdateEvent(Guid id, EventDto updatedEvent)
     {
-        var index = Events.FindIndex(e => e.Id.Equals(id));
+        var index = _events.FindIndex(e => e.Id.Equals(id));
         
         if (index == -1)
         {
-            return Task.FromResult<Event?>(null);
+            throw new NotFoundException($"Event with id {id} was not found");
         }
+
+        ValidateDates(updatedEvent);
 
         var updatedEntity = new Event
         {
@@ -51,21 +97,21 @@ public class EventService :IEventService
             StartAt = updatedEvent.StartAt,
             EndAt = updatedEvent.EndAt
         };
-        Events[index] = updatedEntity;
+        _events[index] = updatedEntity;
         
-        return Task.FromResult<Event?>(updatedEntity);
+        return Task.FromResult(updatedEntity);
     }
 
     public Task<bool> DeleteEvent(Guid id)
     {
-        var eventToDelete = Events.Find(e => e.Id.Equals(id));
+        var eventToDelete = _events.Find(e => e.Id.Equals(id));
         
         if (eventToDelete == null)
         {
             return Task.FromResult(false);
         }
         
-        Events.Remove(eventToDelete);
+        _events.Remove(eventToDelete);
         
         return Task.FromResult(true);
     }

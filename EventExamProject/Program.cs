@@ -1,15 +1,17 @@
-using EventExamProject.Services;
-using EventExamProject.Services.Interfaces;
+using EventExamProject.Extensions;
+using EventExamProject.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
 
 
-builder.Services.AddControllers();
-builder.Services.AddSwaggerGen();
-builder.Services.AddProblemDetails();
-builder.Services.AddScoped<IEventService, EventService>();
+
+builder.Services.AddApplicationServices();
+builder.Services.AddSwaggerConfiguration();
+builder.Services.AddProblemDetailsConfiguration();
 
 var app = builder.Build();
+
+app.UseMiddleware<ExceptionHandlingMiddleware>();
 
 if (app.Environment.IsDevelopment())
 {
