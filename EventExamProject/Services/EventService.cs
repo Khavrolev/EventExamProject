@@ -1,8 +1,10 @@
+using System.ComponentModel.DataAnnotations;
 using EventExamProject.DTOs;
 using EventExamProject.DTOs.Event;
 using EventExamProject.DTOs.Pagination;
 using EventExamProject.Exceptions;
 using EventExamProject.Models;
+using EventExamProject.Resources;
 using EventExamProject.Services.Interfaces;
 
 namespace EventExamProject.Services;
@@ -10,6 +12,14 @@ namespace EventExamProject.Services;
 public class EventService :IEventService
 {
     private readonly List<Event> _events = [];
+
+    private static void ValidateDates(EventDto dto)
+    {
+        if (dto.EndAt <= dto.StartAt)
+        {
+            throw new ValidationException(ValidationMessages.EndAtAfterStartAt);
+        }
+    }
     
     public Task<PaginatedResult<Event>> GetAllEvents(EventFilterDto filter, PaginationParams paginationParams)
     {
@@ -52,6 +62,8 @@ public class EventService :IEventService
     
     public Task<Event> AddEvent(EventDto newEvent)
     {
+        ValidateDates(newEvent);
+
         var newEventEntity = new Event
         {
             Id = Guid.NewGuid(),
@@ -74,6 +86,8 @@ public class EventService :IEventService
         {
             throw new NotFoundException($"Event with id {id} was not found");
         }
+
+        ValidateDates(updatedEvent);
 
         var updatedEntity = new Event
         {
