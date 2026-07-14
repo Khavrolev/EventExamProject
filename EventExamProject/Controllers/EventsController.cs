@@ -49,7 +49,7 @@ public class EventsController(IEventService eventService) : ControllerBase
     [HttpDelete("{id:Guid}")]
     public async Task<ActionResult> DeleteEvent(Guid id)
     {
-        var deleted = await eventService.DeleteEvent(id);
+        await eventService.DeleteEvent(id);
         
         return NoContent();
     }

@@ -11,5 +11,5 @@ public interface IEventService
     Task<Event> GetEventById(Guid id);
     Task<Event> AddEvent(EventDto newEvent);
     Task<Event> UpdateEvent(Guid id, EventDto updatedEvent);
-    Task<bool> DeleteEvent(Guid id);
+    Task DeleteEvent(Guid id);
 }

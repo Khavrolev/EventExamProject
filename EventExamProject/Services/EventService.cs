@@ -102,17 +102,18 @@ public class EventService :IEventService
         return Task.FromResult(updatedEntity);
     }
 
-    public Task<bool> DeleteEvent(Guid id)
+    public Task DeleteEvent(Guid id)
     {
         var eventToDelete = _events.Find(e => e.Id.Equals(id));
         
         if (eventToDelete == null)
         {
-            return Task.FromResult(false);
+            throw new NotFoundException($"Event with id {id} was not found");
+            
         }
         
         _events.Remove(eventToDelete);
         
-        return Task.FromResult(true);
+        return Task.CompletedTask;
     }
 }

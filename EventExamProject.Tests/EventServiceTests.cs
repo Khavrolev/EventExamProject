@@ -76,9 +76,8 @@ public class EventServiceTests
         var service = new EventService();
         var created = await service.AddEvent(CreateValidDto());
 
-        var deleted = await service.DeleteEvent(created.Id);
+        await service.DeleteEvent(created.Id);
 
-        deleted.Should().BeTrue();
         await FluentActions.Awaiting(() => service.GetEventById(created.Id))
             .Should().ThrowAsync<NotFoundException>();
     }
@@ -210,6 +209,15 @@ public class EventServiceTests
         var service = new EventService();
 
         await FluentActions.Awaiting(() => service.GetEventById(Guid.NewGuid()))
+            .Should().ThrowAsync<NotFoundException>();
+    }
+
+    [Fact]
+    public async Task DeleteEvent_ShouldThrowNotFoundException_WhenEventDoesNotExist()
+    {
+        var service = new EventService();
+
+        await FluentActions.Awaiting(() => service.DeleteEvent(Guid.NewGuid()))
             .Should().ThrowAsync<NotFoundException>();
     }
 
