@@ -1,4 +1,6 @@
 using EventExamProject.DTOs;
+using EventExamProject.DTOs.Event;
+using EventExamProject.DTOs.Pagination;
 using EventExamProject.Models;
 using EventExamProject.Services.Interfaces;
 using Microsoft.AspNetCore.Mvc;
@@ -11,9 +13,10 @@ public class EventsController(IEventService eventService) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<List<Event>>> GetAllEvents(
-        [FromQuery] EventFilterDto filter)
+        [FromQuery] EventFilterDto filter,
+        [FromQuery] PaginationParams paginationParams)
     {
-        return Ok(await eventService.GetAllEvents(filter));
+        return Ok(await eventService.GetAllEvents(filter, paginationParams));
     }
     
     [HttpGet("{id:Guid}")]

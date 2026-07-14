@@ -1,4 +1,6 @@
 using EventExamProject.DTOs;
+using EventExamProject.DTOs.Event;
+using EventExamProject.DTOs.Pagination;
 using EventExamProject.Exceptions;
 using EventExamProject.Models;
 using EventExamProject.Services.Interfaces;
@@ -9,7 +11,7 @@ public class EventService :IEventService
 {
     private readonly List<Event> _events = [];
     
-    public Task<List<Event>> GetAllEvents(EventFilterDto filter)
+    public Task<PaginatedResult<Event>> GetAllEvents(EventFilterDto filter, PaginationParams paginationParams)
     {
         var filtered = _events.AsEnumerable();
         
@@ -27,8 +29,17 @@ public class EventService :IEventService
         {
             filtered = filtered.Where(e=>e.EndAt <= filter.To);
         }
+        
+        var filteredList = filtered.ToList();
 
-        return Task.FromResult(filtered.ToList());
+        var paginated = filteredList
+            .Skip((paginationParams.Page - 1) * paginationParams.PageSize)
+            .Take(paginationParams.PageSize)
+            .ToList();
+
+        return Task.FromResult(new PaginatedResult<Event> {
+            Data = paginated, TotalCount = filteredList.Count(), Page = paginationParams.Page, PageSize = paginationParams.PageSize
+        });
     }
 
     public Task<Event> GetEventById(Guid id)

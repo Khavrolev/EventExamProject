@@ -1,7 +1,7 @@
 using EventExamProject.Resources;
 using System.ComponentModel.DataAnnotations;
 
-namespace EventExamProject.DTOs;
+namespace EventExamProject.DTOs.Event;
 
 public class EventDto : IValidatableObject
 {

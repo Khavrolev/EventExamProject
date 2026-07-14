@@ -1,4 +1,4 @@
-namespace EventExamProject.DTOs;
+namespace EventExamProject.DTOs.Event;
 
 public class EventFilterDto
 {
