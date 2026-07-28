@@ -1,4 +1,3 @@
-using EventExamProject.DTOs;
 using EventExamProject.DTOs.Event;
 using EventExamProject.Resources;
 using System.ComponentModel.DataAnnotations;

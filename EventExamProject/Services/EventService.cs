@@ -9,7 +9,7 @@ using EventExamProject.Services.Interfaces;
 
 namespace EventExamProject.Services;
 
-public class EventService :IEventService
+public class EventService : IEventService
 {
     private readonly List<Event> _events = [];
 
