@@ -17,7 +17,7 @@ public class EventService :IEventService
     {
         if (dto.EndAt <= dto.StartAt)
         {
-            throw new ValidationException(ValidationMessages.EndAtAfterStartAt);
+            throw new ValidationException(string.Format(ValidationMessages.DateGreaterThan, nameof(dto.EndAt), nameof(dto.StartAt)));
         }
     }
     
