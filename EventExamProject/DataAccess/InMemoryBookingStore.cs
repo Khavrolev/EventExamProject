@@ -29,7 +29,7 @@ public class InMemoryBookingStore : IBookingStore
 
         if (index == -1)
         {
-            throw new NotFoundException($"Event with id {booking.Id} was not found");
+            throw new NotFoundException($"Booking with id {booking.Id} was not found");
         }
         
         _bookings[index] = booking;

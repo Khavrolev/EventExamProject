@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using EventExamProject.DataAccess;
 using EventExamProject.DTOs.Event;
 using EventExamProject.DTOs.Pagination;
 using EventExamProject.Exceptions;
@@ -21,7 +22,7 @@ public class EventServiceTests
     [Fact]
     public async Task AddEvent_ShouldCreateEvent_WhenDataIsValid()
     {
-        var service = new EventService();
+        var service = new EventService(new InMemoryEventStore());
         var dto = CreateValidDto("Conference");
 
         var created = await service.AddEvent(dto);
@@ -35,7 +36,7 @@ public class EventServiceTests
     [Fact]
     public async Task GetAllEvents_ShouldReturnAllEvents_WhenNoFiltersApplied()
     {
-        var service = new EventService();
+        var service = new EventService(new InMemoryEventStore());
         await service.AddEvent(CreateValidDto("Event 1"));
         await service.AddEvent(CreateValidDto("Event 2"));
 
@@ -48,7 +49,7 @@ public class EventServiceTests
     [Fact]
     public async Task GetEventById_ShouldReturnEvent_WhenEventExists()
     {
-        var service = new EventService();
+        var service = new EventService(new InMemoryEventStore());
         var created = await service.AddEvent(CreateValidDto("Conference"));
 
         var found = await service.GetEventById(created.Id);
@@ -60,7 +61,7 @@ public class EventServiceTests
     [Fact]
     public async Task UpdateEvent_ShouldUpdateFields_WhenEventExists()
     {
-        var service = new EventService();
+        var service = new EventService(new InMemoryEventStore());
         var created = await service.AddEvent(CreateValidDto("Old title"));
         var updateDto = CreateValidDto("New title");
 
@@ -73,7 +74,7 @@ public class EventServiceTests
     [Fact]
     public async Task DeleteEvent_ShouldRemoveEvent_WhenEventExists()
     {
-        var service = new EventService();
+        var service = new EventService(new InMemoryEventStore());
         var created = await service.AddEvent(CreateValidDto());
 
         await service.DeleteEvent(created.Id);
@@ -85,7 +86,7 @@ public class EventServiceTests
     [Fact]
     public async Task GetAllEvents_ShouldFilterByTitle_WhenTitleFilterApplied()
     {
-        var service = new EventService();
+        var service = new EventService(new InMemoryEventStore());
         await service.AddEvent(CreateValidDto("Team Meeting"));
         await service.AddEvent(CreateValidDto("Conference"));
         await service.AddEvent(CreateValidDto("team standup"));
@@ -99,7 +100,7 @@ public class EventServiceTests
     [Fact]
     public async Task GetAllEvents_ShouldFilterByDateRange_WhenFromAndToApplied()
     {
-        var service = new EventService();
+        var service = new EventService(new InMemoryEventStore());
         var baseDate = new DateTime(2026, 8, 1);
         await service.AddEvent(CreateValidDto("Early", baseDate, baseDate.AddHours(1)));
         await service.AddEvent(CreateValidDto("Middle", baseDate.AddDays(5), baseDate.AddDays(5).AddHours(1)));
@@ -114,7 +115,7 @@ public class EventServiceTests
     [Fact]
     public async Task GetAllEvents_ShouldReturnCorrectPage_WhenPaginationApplied()
     {
-        var service = new EventService();
+        var service = new EventService(new InMemoryEventStore());
         for (var i = 1; i <= 5; i++)
         {
             await service.AddEvent(CreateValidDto($"Event {i}"));
@@ -131,7 +132,7 @@ public class EventServiceTests
     [Fact]
     public async Task GetAllEvents_ShouldCombineFilters_WithLogicalAnd()
     {
-        var service = new EventService();
+        var service = new EventService(new InMemoryEventStore());
         var baseDate = new DateTime(2026, 8, 1);
         await service.AddEvent(CreateValidDto("Team Meeting", baseDate, baseDate.AddHours(1)));
         await service.AddEvent(CreateValidDto("team standup", baseDate.AddDays(10), baseDate.AddDays(10).AddHours(1)));
@@ -146,7 +147,7 @@ public class EventServiceTests
     [Fact]
     public async Task GetAllEvents_ShouldReturnAllEvents_WhenTitleFilterIsEmptyString()
     {
-        var service = new EventService();
+        var service = new EventService(new InMemoryEventStore());
         await service.AddEvent(CreateValidDto("Event 1"));
         await service.AddEvent(CreateValidDto("Event 2"));
 
@@ -158,7 +159,7 @@ public class EventServiceTests
     [Fact]
     public async Task GetAllEvents_ShouldIncludeEvent_WhenStartAtEqualsFromBoundary()
     {
-        var service = new EventService();
+        var service = new EventService(new InMemoryEventStore());
         var boundary = new DateTime(2026, 8, 1);
         await service.AddEvent(CreateValidDto("Boundary", boundary, boundary.AddHours(1)));
 
@@ -170,7 +171,7 @@ public class EventServiceTests
     [Fact]
     public async Task GetAllEvents_ShouldIncludeEvent_WhenEndAtEqualsToBoundary()
     {
-        var service = new EventService();
+        var service = new EventService(new InMemoryEventStore());
         var boundary = new DateTime(2026, 8, 1);
         await service.AddEvent(CreateValidDto("Boundary", boundary.AddHours(-1), boundary));
 
@@ -182,7 +183,7 @@ public class EventServiceTests
     [Fact]
     public async Task GetAllEvents_ShouldReturnEmptyData_WhenPageExceedsAvailableData()
     {
-        var service = new EventService();
+        var service = new EventService(new InMemoryEventStore());
         await service.AddEvent(CreateValidDto("Event 1"));
 
         var result = await service.GetAllEvents(new EventFilterDto(), new PaginationParams { Page = 999, PageSize = 10 });
@@ -194,7 +195,7 @@ public class EventServiceTests
     [Fact]
     public async Task GetAllEvents_ShouldReturnEmptyData_WhenPageSizeIsZero()
     {
-        var service = new EventService();
+        var service = new EventService(new InMemoryEventStore());
         await service.AddEvent(CreateValidDto("Event 1"));
 
         var result = await service.GetAllEvents(new EventFilterDto(), new PaginationParams { Page = 1, PageSize = 0 });
@@ -206,7 +207,7 @@ public class EventServiceTests
     [Fact]
     public async Task GetEventById_ShouldThrowNotFoundException_WhenEventDoesNotExist()
     {
-        var service = new EventService();
+        var service = new EventService(new InMemoryEventStore());
 
         await FluentActions.Awaiting(() => service.GetEventById(Guid.NewGuid()))
             .Should().ThrowAsync<NotFoundException>();
@@ -215,7 +216,7 @@ public class EventServiceTests
     [Fact]
     public async Task DeleteEvent_ShouldThrowNotFoundException_WhenEventDoesNotExist()
     {
-        var service = new EventService();
+        var service = new EventService(new InMemoryEventStore());
 
         await FluentActions.Awaiting(() => service.DeleteEvent(Guid.NewGuid()))
             .Should().ThrowAsync<NotFoundException>();
@@ -224,7 +225,7 @@ public class EventServiceTests
     [Fact]
     public async Task UpdateEvent_ShouldThrowNotFoundException_WhenEventDoesNotExist()
     {
-        var service = new EventService();
+        var service = new EventService(new InMemoryEventStore());
         var dto = CreateValidDto();
 
         await FluentActions.Awaiting(() => service.UpdateEvent(Guid.NewGuid(), dto))
@@ -234,7 +235,7 @@ public class EventServiceTests
     [Fact]
     public async Task AddEvent_ShouldThrowValidationException_WhenEndAtIsBeforeStartAt()
     {
-        var service = new EventService();
+        var service = new EventService(new InMemoryEventStore());
         var invalidDto = CreateValidDto(startAt: new DateTime(2026, 8, 2), endAt: new DateTime(2026, 8, 1));
 
         await FluentActions.Awaiting(() => service.AddEvent(invalidDto))
@@ -244,7 +245,7 @@ public class EventServiceTests
     [Fact]
     public async Task UpdateEvent_ShouldThrowValidationException_WhenEndAtIsBeforeStartAt()
     {
-        var service = new EventService();
+        var service = new EventService(new InMemoryEventStore());
         var created = await service.AddEvent(CreateValidDto());
         var invalidDto = CreateValidDto(startAt: new DateTime(2026, 8, 2), endAt: new DateTime(2026, 8, 1));
 
