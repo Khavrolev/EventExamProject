@@ -1,5 +1,5 @@
 using System.ComponentModel.DataAnnotations;
-using EventExamProject.DTOs;
+using EventExamProject.DataAccess.Interfaces;
 using EventExamProject.DTOs.Event;
 using EventExamProject.DTOs.Pagination;
 using EventExamProject.Exceptions;
@@ -9,22 +9,20 @@ using EventExamProject.Services.Interfaces;
 
 namespace EventExamProject.Services;
 
-public class EventService :IEventService
+public class EventService(IEventStore eventStore) : IEventService
 {
-    private readonly List<Event> _events = [];
-
     private static void ValidateDates(EventDto dto)
     {
         if (dto.EndAt <= dto.StartAt)
         {
-            throw new ValidationException(ValidationMessages.EndAtAfterStartAt);
+            throw new ValidationException(string.Format(ValidationMessages.DateGreaterThan, nameof(dto.EndAt), nameof(dto.StartAt)));
         }
     }
-    
+
     public Task<PaginatedResult<Event>> GetAllEvents(EventFilterDto filter, PaginationParams paginationParams)
     {
-        var filtered = _events.AsEnumerable();
-        
+        var filtered = eventStore.GetAll();
+
         if (!string.IsNullOrEmpty(filter.Title))
         {
             filtered = filtered.Where(e => e.Title.Contains(filter.Title, StringComparison.OrdinalIgnoreCase));
@@ -34,12 +32,12 @@ public class EventService :IEventService
         {
             filtered = filtered.Where(e=>e.StartAt >= filter.From);
         }
-        
+
         if (filter.To.HasValue)
         {
             filtered = filtered.Where(e=>e.EndAt <= filter.To);
         }
-        
+
         var filteredList = filtered.ToList();
 
         var paginated = filteredList
@@ -54,65 +52,50 @@ public class EventService :IEventService
 
     public Task<Event> GetEventById(Guid id)
     {
-        var foundEvent = _events.Find(e => e.Id.Equals(id));
+        var foundEvent = eventStore.GetById(id);
 
         return foundEvent == null ? throw new NotFoundException($"Event with id {id} was not found") : Task.FromResult(foundEvent);
-
     }
-    
-    public Task<Event> AddEvent(EventDto newEvent)
+
+    public Task<Event> CreateEvent(EventDto newEvent)
     {
         ValidateDates(newEvent);
 
-        var newEventEntity = new Event
-        {
-            Id = Guid.NewGuid(),
-            Title = newEvent.Title,
-            Description = newEvent.Description,
-            StartAt = newEvent.StartAt,
-            EndAt = newEvent.EndAt
-        };  
-        _events.Add(newEventEntity);
-        
-        return Task.FromResult(newEventEntity);
+        var newEventEntity = Event.Create(newEvent);
+        eventStore.Add(newEventEntity);
 
+        return Task.FromResult(newEventEntity);
     }
 
     public Task<Event> UpdateEvent(Guid id, EventDto updatedEvent)
     {
-        var index = _events.FindIndex(e => e.Id.Equals(id));
-        
-        if (index == -1)
+        var existingEvent = eventStore.GetById(id);
+
+        if (existingEvent == null)
         {
             throw new NotFoundException($"Event with id {id} was not found");
         }
 
         ValidateDates(updatedEvent);
 
-        var updatedEntity = new Event
-        {
-            Id = id,
-            Title = updatedEvent.Title,
-            Description = updatedEvent.Description,
-            StartAt = updatedEvent.StartAt,
-            EndAt = updatedEvent.EndAt
-        };
-        _events[index] = updatedEntity;
-        
-        return Task.FromResult(updatedEntity);
+        existingEvent.Update(updatedEvent);
+        eventStore.Update(existingEvent);
+
+        return Task.FromResult(existingEvent);
     }
 
-    public Task<bool> DeleteEvent(Guid id)
+    public Task DeleteEvent(Guid id)
     {
-        var eventToDelete = _events.Find(e => e.Id.Equals(id));
-        
+        var eventToDelete = eventStore.GetById(id);
+
         if (eventToDelete == null)
         {
-            return Task.FromResult(false);
+            throw new NotFoundException($"Event with id {id} was not found");
+
         }
-        
-        _events.Remove(eventToDelete);
-        
-        return Task.FromResult(true);
+
+        eventStore.Delete(eventToDelete);
+
+        return Task.CompletedTask;
     }
 }

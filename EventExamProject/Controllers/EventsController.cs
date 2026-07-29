@@ -1,4 +1,3 @@
-using EventExamProject.DTOs;
 using EventExamProject.DTOs.Event;
 using EventExamProject.DTOs.Pagination;
 using EventExamProject.Models;
@@ -9,7 +8,7 @@ namespace EventExamProject.Controllers;
 
 [ApiController]
 [Route("events")]
-public class EventsController(IEventService eventService) : ControllerBase
+public class EventsController(IEventService eventService, IBookingService bookingService) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<List<Event>>> GetAllEvents(
@@ -28,9 +27,9 @@ public class EventsController(IEventService eventService) : ControllerBase
     }
 
     [HttpPost]
-    public async Task<ActionResult<Event>> AddEvent(EventDto newEvent)
+    public async Task<ActionResult<Event>> CreateEvent(EventDto newEvent)
     {
-        var created = await eventService.AddEvent(newEvent);
+        var created = await eventService.CreateEvent(newEvent);
 
         return CreatedAtAction(nameof(GetEventById), new
         {
@@ -49,8 +48,19 @@ public class EventsController(IEventService eventService) : ControllerBase
     [HttpDelete("{id:Guid}")]
     public async Task<ActionResult> DeleteEvent(Guid id)
     {
-        var deleted = await eventService.DeleteEvent(id);
+        await eventService.DeleteEvent(id);
         
         return NoContent();
+    }
+    
+    [HttpPost("{id:Guid}/book")]
+    public async Task<ActionResult<Booking>> CreateBooking(Guid id)
+    {
+        var created = await bookingService.CreateBooking(id);
+
+        return AcceptedAtAction(nameof(BookingController.GetBookingById), "Booking", new
+        {
+            id = created.Id
+        }, created);
     }
 }

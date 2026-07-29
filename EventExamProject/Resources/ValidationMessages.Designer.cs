@@ -51,9 +51,9 @@ namespace EventExamProject.Resources {
             }
         }
         
-        internal static string EndAtAfterStartAt {
+        internal static string DateGreaterThan {
             get {
-                return ResourceManager.GetString("EndAtAfterStartAt", resourceCulture);
+                return ResourceManager.GetString("DateGreaterThan", resourceCulture);
             }
         }
     }

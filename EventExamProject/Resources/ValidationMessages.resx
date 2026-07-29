@@ -21,7 +21,7 @@
     <data name="FieldRequired" xml:space="preserve">
         <value>The {0} field is required</value>
     </data>
-    <data name="EndAtAfterStartAt" xml:space="preserve">
-        <value>End date must be later than start date</value>
+    <data name="DateGreaterThan" xml:space="preserve">
+        <value>{0} must be later than {1}</value>
     </data>
 </root>
