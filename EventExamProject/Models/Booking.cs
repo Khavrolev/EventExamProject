@@ -18,4 +18,10 @@ public class Booking
             CreatedAt = DateTime.UtcNow
         };
     }
+    
+    public void Confirm()
+    {
+        Status = BookingStatus.Confirmed;
+        ProcessedAt = DateTime.UtcNow;
+    }
 }

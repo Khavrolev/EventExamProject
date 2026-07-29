@@ -16,6 +16,8 @@ public static class ServiceExtensions
         
         services.AddSingleton<IBookingStore, InMemoryBookingStore>();
         services.AddSingleton<IBookingService, BookingService>();
+        
+        services.AddHostedService<BookingProcessingService>();
 
         return services;
     }
