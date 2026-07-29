@@ -25,7 +25,7 @@ public class EventServiceTests
         var service = new EventService(new InMemoryEventStore());
         var dto = CreateValidDto("Conference");
 
-        var created = await service.CreateEvent(dto);
+        var created = await service.CreateEventAsync(dto);
 
         created.Id.Should().NotBe(Guid.Empty);
         created.Title.Should().Be(dto.Title);
@@ -37,10 +37,10 @@ public class EventServiceTests
     public async Task GetAllEvents_ShouldReturnAllEvents_WhenNoFiltersApplied()
     {
         var service = new EventService(new InMemoryEventStore());
-        await service.CreateEvent(CreateValidDto("Event 1"));
-        await service.CreateEvent(CreateValidDto("Event 2"));
+        await service.CreateEventAsync(CreateValidDto("Event 1"));
+        await service.CreateEventAsync(CreateValidDto("Event 2"));
 
-        var result = await service.GetAllEvents(new EventFilterDto(), new PaginationParams());
+        var result = await service.GetAllEventsAsync(new EventFilterDto(), new PaginationParamsDto());
 
         result.TotalCount.Should().Be(2);
         result.Data.Should().HaveCount(2);
@@ -50,9 +50,9 @@ public class EventServiceTests
     public async Task GetEventById_ShouldReturnEvent_WhenEventExists()
     {
         var service = new EventService(new InMemoryEventStore());
-        var created = await service.CreateEvent(CreateValidDto("Conference"));
+        var created = await service.CreateEventAsync(CreateValidDto("Conference"));
 
-        var found = await service.GetEventById(created.Id);
+        var found = await service.GetEventByIdAsync(created.Id);
 
         found.Id.Should().Be(created.Id);
         found.Title.Should().Be(created.Title);
@@ -62,10 +62,10 @@ public class EventServiceTests
     public async Task UpdateEvent_ShouldUpdateFields_WhenEventExists()
     {
         var service = new EventService(new InMemoryEventStore());
-        var created = await service.CreateEvent(CreateValidDto("Old title"));
+        var created = await service.CreateEventAsync(CreateValidDto("Old title"));
         var updateDto = CreateValidDto("New title");
 
-        var updated = await service.UpdateEvent(created.Id, updateDto);
+        var updated = await service.UpdateEventAsync(created.Id, updateDto);
 
         updated.Id.Should().Be(created.Id);
         updated.Title.Should().Be("New title");
@@ -75,11 +75,11 @@ public class EventServiceTests
     public async Task DeleteEvent_ShouldRemoveEvent_WhenEventExists()
     {
         var service = new EventService(new InMemoryEventStore());
-        var created = await service.CreateEvent(CreateValidDto());
+        var created = await service.CreateEventAsync(CreateValidDto());
 
-        await service.DeleteEvent(created.Id);
+        await service.DeleteEventAsync(created.Id);
 
-        await FluentActions.Awaiting(() => service.GetEventById(created.Id))
+        await FluentActions.Awaiting(() => service.GetEventByIdAsync(created.Id))
             .Should().ThrowAsync<NotFoundException>();
     }
 
@@ -87,11 +87,11 @@ public class EventServiceTests
     public async Task GetAllEvents_ShouldFilterByTitle_WhenTitleFilterApplied()
     {
         var service = new EventService(new InMemoryEventStore());
-        await service.CreateEvent(CreateValidDto("Team Meeting"));
-        await service.CreateEvent(CreateValidDto("Conference"));
-        await service.CreateEvent(CreateValidDto("team standup"));
+        await service.CreateEventAsync(CreateValidDto("Team Meeting"));
+        await service.CreateEventAsync(CreateValidDto("Conference"));
+        await service.CreateEventAsync(CreateValidDto("team standup"));
 
-        var result = await service.GetAllEvents(new EventFilterDto { Title = "team" }, new PaginationParams());
+        var result = await service.GetAllEventsAsync(new EventFilterDto { Title = "team" }, new PaginationParamsDto());
 
         result.TotalCount.Should().Be(2);
         result.Data.Should().OnlyContain(e => e.Title.Contains("team", StringComparison.OrdinalIgnoreCase));
@@ -102,12 +102,12 @@ public class EventServiceTests
     {
         var service = new EventService(new InMemoryEventStore());
         var baseDate = new DateTime(2026, 8, 1);
-        await service.CreateEvent(CreateValidDto("Early", baseDate, baseDate.AddHours(1)));
-        await service.CreateEvent(CreateValidDto("Middle", baseDate.AddDays(5), baseDate.AddDays(5).AddHours(1)));
-        await service.CreateEvent(CreateValidDto("Late", baseDate.AddDays(10), baseDate.AddDays(10).AddHours(1)));
+        await service.CreateEventAsync(CreateValidDto("Early", baseDate, baseDate.AddHours(1)));
+        await service.CreateEventAsync(CreateValidDto("Middle", baseDate.AddDays(5), baseDate.AddDays(5).AddHours(1)));
+        await service.CreateEventAsync(CreateValidDto("Late", baseDate.AddDays(10), baseDate.AddDays(10).AddHours(1)));
 
         var filter = new EventFilterDto { From = baseDate.AddDays(2), To = baseDate.AddDays(7) };
-        var result = await service.GetAllEvents(filter, new PaginationParams());
+        var result = await service.GetAllEventsAsync(filter, new PaginationParamsDto());
 
         result.Data.Should().ContainSingle().Which.Title.Should().Be("Middle");
     }
@@ -118,10 +118,10 @@ public class EventServiceTests
         var service = new EventService(new InMemoryEventStore());
         for (var i = 1; i <= 5; i++)
         {
-            await service.CreateEvent(CreateValidDto($"Event {i}"));
+            await service.CreateEventAsync(CreateValidDto($"Event {i}"));
         }
 
-        var result = await service.GetAllEvents(new EventFilterDto(), new PaginationParams { Page = 2, PageSize = 2 });
+        var result = await service.GetAllEventsAsync(new EventFilterDto(), new PaginationParamsDto { Page = 2, PageSize = 2 });
 
         result.TotalCount.Should().Be(5);
         result.Page.Should().Be(2);
@@ -134,12 +134,12 @@ public class EventServiceTests
     {
         var service = new EventService(new InMemoryEventStore());
         var baseDate = new DateTime(2026, 8, 1);
-        await service.CreateEvent(CreateValidDto("Team Meeting", baseDate, baseDate.AddHours(1)));
-        await service.CreateEvent(CreateValidDto("team standup", baseDate.AddDays(10), baseDate.AddDays(10).AddHours(1)));
-        await service.CreateEvent(CreateValidDto("Conference", baseDate, baseDate.AddHours(1)));
+        await service.CreateEventAsync(CreateValidDto("Team Meeting", baseDate, baseDate.AddHours(1)));
+        await service.CreateEventAsync(CreateValidDto("team standup", baseDate.AddDays(10), baseDate.AddDays(10).AddHours(1)));
+        await service.CreateEventAsync(CreateValidDto("Conference", baseDate, baseDate.AddHours(1)));
 
         var filter = new EventFilterDto { Title = "team", From = baseDate.AddDays(-1), To = baseDate.AddDays(2) };
-        var result = await service.GetAllEvents(filter, new PaginationParams());
+        var result = await service.GetAllEventsAsync(filter, new PaginationParamsDto());
 
         result.Data.Should().ContainSingle().Which.Title.Should().Be("Team Meeting");
     }
@@ -148,10 +148,10 @@ public class EventServiceTests
     public async Task GetAllEvents_ShouldReturnAllEvents_WhenTitleFilterIsEmptyString()
     {
         var service = new EventService(new InMemoryEventStore());
-        await service.CreateEvent(CreateValidDto("Event 1"));
-        await service.CreateEvent(CreateValidDto("Event 2"));
+        await service.CreateEventAsync(CreateValidDto("Event 1"));
+        await service.CreateEventAsync(CreateValidDto("Event 2"));
 
-        var result = await service.GetAllEvents(new EventFilterDto { Title = "" }, new PaginationParams());
+        var result = await service.GetAllEventsAsync(new EventFilterDto { Title = "" }, new PaginationParamsDto());
 
         result.TotalCount.Should().Be(2);
     }
@@ -161,9 +161,9 @@ public class EventServiceTests
     {
         var service = new EventService(new InMemoryEventStore());
         var boundary = new DateTime(2026, 8, 1);
-        await service.CreateEvent(CreateValidDto("Boundary", boundary, boundary.AddHours(1)));
+        await service.CreateEventAsync(CreateValidDto("Boundary", boundary, boundary.AddHours(1)));
 
-        var result = await service.GetAllEvents(new EventFilterDto { From = boundary }, new PaginationParams());
+        var result = await service.GetAllEventsAsync(new EventFilterDto { From = boundary }, new PaginationParamsDto());
 
         result.Data.Should().ContainSingle().Which.Title.Should().Be("Boundary");
     }
@@ -173,9 +173,9 @@ public class EventServiceTests
     {
         var service = new EventService(new InMemoryEventStore());
         var boundary = new DateTime(2026, 8, 1);
-        await service.CreateEvent(CreateValidDto("Boundary", boundary.AddHours(-1), boundary));
+        await service.CreateEventAsync(CreateValidDto("Boundary", boundary.AddHours(-1), boundary));
 
-        var result = await service.GetAllEvents(new EventFilterDto { To = boundary }, new PaginationParams());
+        var result = await service.GetAllEventsAsync(new EventFilterDto { To = boundary }, new PaginationParamsDto());
 
         result.Data.Should().ContainSingle().Which.Title.Should().Be("Boundary");
     }
@@ -184,9 +184,9 @@ public class EventServiceTests
     public async Task GetAllEvents_ShouldReturnEmptyData_WhenPageExceedsAvailableData()
     {
         var service = new EventService(new InMemoryEventStore());
-        await service.CreateEvent(CreateValidDto("Event 1"));
+        await service.CreateEventAsync(CreateValidDto("Event 1"));
 
-        var result = await service.GetAllEvents(new EventFilterDto(), new PaginationParams { Page = 999, PageSize = 10 });
+        var result = await service.GetAllEventsAsync(new EventFilterDto(), new PaginationParamsDto { Page = 999, PageSize = 10 });
 
         result.Data.Should().BeEmpty();
         result.TotalCount.Should().Be(1);
@@ -196,9 +196,9 @@ public class EventServiceTests
     public async Task GetAllEvents_ShouldReturnEmptyData_WhenPageSizeIsZero()
     {
         var service = new EventService(new InMemoryEventStore());
-        await service.CreateEvent(CreateValidDto("Event 1"));
+        await service.CreateEventAsync(CreateValidDto("Event 1"));
 
-        var result = await service.GetAllEvents(new EventFilterDto(), new PaginationParams { Page = 1, PageSize = 0 });
+        var result = await service.GetAllEventsAsync(new EventFilterDto(), new PaginationParamsDto { Page = 1, PageSize = 0 });
 
         result.Data.Should().BeEmpty();
         result.TotalCount.Should().Be(1);
@@ -209,7 +209,7 @@ public class EventServiceTests
     {
         var service = new EventService(new InMemoryEventStore());
 
-        await FluentActions.Awaiting(() => service.GetEventById(Guid.NewGuid()))
+        await FluentActions.Awaiting(() => service.GetEventByIdAsync(Guid.NewGuid()))
             .Should().ThrowAsync<NotFoundException>();
     }
 
@@ -218,7 +218,7 @@ public class EventServiceTests
     {
         var service = new EventService(new InMemoryEventStore());
 
-        await FluentActions.Awaiting(() => service.DeleteEvent(Guid.NewGuid()))
+        await FluentActions.Awaiting(() => service.DeleteEventAsync(Guid.NewGuid()))
             .Should().ThrowAsync<NotFoundException>();
     }
 
@@ -228,7 +228,7 @@ public class EventServiceTests
         var service = new EventService(new InMemoryEventStore());
         var dto = CreateValidDto();
 
-        await FluentActions.Awaiting(() => service.UpdateEvent(Guid.NewGuid(), dto))
+        await FluentActions.Awaiting(() => service.UpdateEventAsync(Guid.NewGuid(), dto))
             .Should().ThrowAsync<NotFoundException>();
     }
 
@@ -238,7 +238,7 @@ public class EventServiceTests
         var service = new EventService(new InMemoryEventStore());
         var invalidDto = CreateValidDto(startAt: new DateTime(2026, 8, 2), endAt: new DateTime(2026, 8, 1));
 
-        await FluentActions.Awaiting(() => service.CreateEvent(invalidDto))
+        await FluentActions.Awaiting(() => service.CreateEventAsync(invalidDto))
             .Should().ThrowAsync<ValidationException>();
     }
 
@@ -246,10 +246,10 @@ public class EventServiceTests
     public async Task UpdateEvent_ShouldThrowValidationException_WhenEndAtIsBeforeStartAt()
     {
         var service = new EventService(new InMemoryEventStore());
-        var created = await service.CreateEvent(CreateValidDto());
+        var created = await service.CreateEventAsync(CreateValidDto());
         var invalidDto = CreateValidDto(startAt: new DateTime(2026, 8, 2), endAt: new DateTime(2026, 8, 1));
 
-        await FluentActions.Awaiting(() => service.UpdateEvent(created.Id, invalidDto))
+        await FluentActions.Awaiting(() => service.UpdateEventAsync(created.Id, invalidDto))
             .Should().ThrowAsync<ValidationException>();
     }
 }

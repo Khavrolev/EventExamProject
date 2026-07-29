@@ -7,16 +7,16 @@ namespace EventExamProject.Services;
 
 public class BookingService(IBookingStore bookingStore, IEventService eventService) : IBookingService
 {
-    public async Task<Booking> CreateBooking(Guid eventId)
+    public async Task<Booking> CreateBookingAsync(Guid eventId)
     {
-        await eventService.GetEventById(eventId);
+        await eventService.GetEventByIdAsync(eventId);
         var newBookingEntity = Booking.CreatePending(eventId);
         bookingStore.Add(newBookingEntity);
 
         return newBookingEntity;
     }
-    
-    public Task<Booking> GetBookingById(Guid id)
+
+    public Task<Booking> GetBookingByIdAsync(Guid id)
     {
         var foundBooking = bookingStore.GetById(id);
 

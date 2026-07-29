@@ -31,9 +31,9 @@ public class BookingServiceTests
     public async Task CreateBooking_ShouldCreatePendingBooking_WhenEventExists()
     {
         var (bookingService, eventService, _) = CreateServices();
-        var createdEvent = await eventService.CreateEvent(CreateValidEventDto());
+        var createdEvent = await eventService.CreateEventAsync(CreateValidEventDto());
 
-        var booking = await bookingService.CreateBooking(createdEvent.Id);
+        var booking = await bookingService.CreateBookingAsync(createdEvent.Id);
 
         booking.Id.Should().NotBe(Guid.Empty);
         booking.EventId.Should().Be(createdEvent.Id);
@@ -45,11 +45,11 @@ public class BookingServiceTests
     public async Task CreateBooking_ShouldCreateBookingsWithUniqueIds_WhenCalledMultipleTimesForSameEvent()
     {
         var (bookingService, eventService, _) = CreateServices();
-        var createdEvent = await eventService.CreateEvent(CreateValidEventDto());
+        var createdEvent = await eventService.CreateEventAsync(CreateValidEventDto());
 
-        var first = await bookingService.CreateBooking(createdEvent.Id);
-        var second = await bookingService.CreateBooking(createdEvent.Id);
-        var third = await bookingService.CreateBooking(createdEvent.Id);
+        var first = await bookingService.CreateBookingAsync(createdEvent.Id);
+        var second = await bookingService.CreateBookingAsync(createdEvent.Id);
+        var third = await bookingService.CreateBookingAsync(createdEvent.Id);
 
         new[] { first.Id, second.Id, third.Id }.Should().OnlyHaveUniqueItems();
     }
@@ -58,10 +58,10 @@ public class BookingServiceTests
     public async Task GetBookingById_ShouldReturnBooking_WhenBookingExists()
     {
         var (bookingService, eventService, _) = CreateServices();
-        var createdEvent = await eventService.CreateEvent(CreateValidEventDto());
-        var created = await bookingService.CreateBooking(createdEvent.Id);
+        var createdEvent = await eventService.CreateEventAsync(CreateValidEventDto());
+        var created = await bookingService.CreateBookingAsync(createdEvent.Id);
 
-        var found = await bookingService.GetBookingById(created.Id);
+        var found = await bookingService.GetBookingByIdAsync(created.Id);
 
         found.Id.Should().Be(created.Id);
         found.EventId.Should().Be(created.EventId);
@@ -72,13 +72,13 @@ public class BookingServiceTests
     public async Task GetBookingById_ShouldReflectStatusChange_AfterBookingIsConfirmed()
     {
         var (bookingService, eventService, bookingStore) = CreateServices();
-        var createdEvent = await eventService.CreateEvent(CreateValidEventDto());
-        var created = await bookingService.CreateBooking(createdEvent.Id);
+        var createdEvent = await eventService.CreateEventAsync(CreateValidEventDto());
+        var created = await bookingService.CreateBookingAsync(createdEvent.Id);
 
         created.Confirm();
         bookingStore.Update(created);
 
-        var found = await bookingService.GetBookingById(created.Id);
+        var found = await bookingService.GetBookingByIdAsync(created.Id);
 
         found.Status.Should().Be(BookingStatus.Confirmed);
         found.ProcessedAt.Should().NotBeNull();
@@ -89,7 +89,7 @@ public class BookingServiceTests
     {
         var (bookingService, _, _) = CreateServices();
 
-        await FluentActions.Awaiting(() => bookingService.CreateBooking(Guid.NewGuid()))
+        await FluentActions.Awaiting(() => bookingService.CreateBookingAsync(Guid.NewGuid()))
             .Should().ThrowAsync<NotFoundException>();
     }
 
@@ -97,10 +97,10 @@ public class BookingServiceTests
     public async Task CreateBooking_ShouldThrowNotFoundException_WhenEventWasDeleted()
     {
         var (bookingService, eventService, _) = CreateServices();
-        var createdEvent = await eventService.CreateEvent(CreateValidEventDto());
-        await eventService.DeleteEvent(createdEvent.Id);
+        var createdEvent = await eventService.CreateEventAsync(CreateValidEventDto());
+        await eventService.DeleteEventAsync(createdEvent.Id);
 
-        await FluentActions.Awaiting(() => bookingService.CreateBooking(createdEvent.Id))
+        await FluentActions.Awaiting(() => bookingService.CreateBookingAsync(createdEvent.Id))
             .Should().ThrowAsync<NotFoundException>();
     }
 
@@ -109,7 +109,7 @@ public class BookingServiceTests
     {
         var (bookingService, _, _) = CreateServices();
 
-        await FluentActions.Awaiting(() => bookingService.GetBookingById(Guid.NewGuid()))
+        await FluentActions.Awaiting(() => bookingService.GetBookingByIdAsync(Guid.NewGuid()))
             .Should().ThrowAsync<NotFoundException>();
     }
 }
