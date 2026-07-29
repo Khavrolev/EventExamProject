@@ -28,9 +28,9 @@ public class EventsController(IEventService eventService) : ControllerBase
     }
 
     [HttpPost]
-    public async Task<ActionResult<Event>> AddEvent(EventDto newEvent)
+    public async Task<ActionResult<Event>> CreateEvent(EventDto newEvent)
     {
-        var created = await eventService.AddEvent(newEvent);
+        var created = await eventService.CreateEvent(newEvent);
 
         return CreatedAtAction(nameof(GetEventById), new
         {

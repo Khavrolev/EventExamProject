@@ -1,6 +1,5 @@
 using System.ComponentModel.DataAnnotations;
 using EventExamProject.DataAccess.Interfaces;
-using EventExamProject.DTOs;
 using EventExamProject.DTOs.Event;
 using EventExamProject.DTOs.Pagination;
 using EventExamProject.Exceptions;
@@ -56,10 +55,9 @@ public class EventService(IEventStore eventStore) : IEventService
         var foundEvent = eventStore.GetById(id);
 
         return foundEvent == null ? throw new NotFoundException($"Event with id {id} was not found") : Task.FromResult(foundEvent);
-
     }
 
-    public Task<Event> AddEvent(EventDto newEvent)
+    public Task<Event> CreateEvent(EventDto newEvent)
     {
         ValidateDates(newEvent);
 
@@ -67,7 +65,6 @@ public class EventService(IEventStore eventStore) : IEventService
         eventStore.Add(newEventEntity);
 
         return Task.FromResult(newEventEntity);
-
     }
 
     public Task<Event> UpdateEvent(Guid id, EventDto updatedEvent)
