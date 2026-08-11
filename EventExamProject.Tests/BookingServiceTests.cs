@@ -21,9 +21,10 @@ public class BookingServiceTests
 
     private static (BookingService BookingService, EventService EventService, InMemoryBookingStore BookingStore) CreateServices()
     {
-        var eventService = new EventService(new InMemoryEventStore());
+        var eventStore = new InMemoryEventStore();
+        var eventService = new EventService(eventStore);
         var bookingStore = new InMemoryBookingStore();
-        var bookingService = new BookingService(bookingStore, eventService);
+        var bookingService = new BookingService(bookingStore, eventStore, eventService);
 
         return (bookingService, eventService, bookingStore);
     }

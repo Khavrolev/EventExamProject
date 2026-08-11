@@ -11,6 +11,8 @@ namespace EventExamProject.Controllers;
 public class EventsController(IEventService eventService, IBookingService bookingService) : ControllerBase
 {
     [HttpGet]
+    [ProducesResponseType(typeof(PaginatedResultDto<EventInfoDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<PaginatedResultDto<EventInfoDto>>> GetAllEvents(
         [FromQuery] EventFilterDto filter,
         [FromQuery] PaginationParamsDto paginationParams)
@@ -27,6 +29,8 @@ public class EventsController(IEventService eventService, IBookingService bookin
     }
 
     [HttpGet("{id:Guid}")]
+    [ProducesResponseType(typeof(EventInfoDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<EventInfoDto>> GetEventById(Guid id)
     {
         var eventById = await eventService.GetEventByIdAsync(id);
@@ -35,6 +39,8 @@ public class EventsController(IEventService eventService, IBookingService bookin
     }
 
     [HttpPost]
+    [ProducesResponseType(typeof(EventInfoDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<EventInfoDto>> CreateEvent(EventDto newEvent)
     {
         var created = await eventService.CreateEventAsync(newEvent);
@@ -47,6 +53,9 @@ public class EventsController(IEventService eventService, IBookingService bookin
     }
 
     [HttpPut("{id:Guid}")]
+    [ProducesResponseType(typeof(EventInfoDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<EventInfoDto>> UpdateEvent(Guid id, EventDto newEvent)
     {
         var updated = await eventService.UpdateEventAsync(id, newEvent);
@@ -55,6 +64,8 @@ public class EventsController(IEventService eventService, IBookingService bookin
     }
 
     [HttpDelete("{id:Guid}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<ActionResult> DeleteEvent(Guid id)
     {
         await eventService.DeleteEventAsync(id);
@@ -63,6 +74,9 @@ public class EventsController(IEventService eventService, IBookingService bookin
     }
 
     [HttpPost("{id:Guid}/book")]
+    [ProducesResponseType(typeof(BookingInfoDto), StatusCodes.Status202Accepted)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<ActionResult<BookingInfoDto>> CreateBooking(Guid id)
     {
         var created = await bookingService.CreateBookingAsync(id);
