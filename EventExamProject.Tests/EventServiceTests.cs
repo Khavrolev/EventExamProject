@@ -16,7 +16,8 @@ public class EventServiceTests
             Title = title,
             Description = "Description",
             StartAt = startAt ?? new DateTime(2026, 8, 1),
-            EndAt = endAt ?? new DateTime(2026, 8, 1).AddHours(1)
+            EndAt = endAt ?? new DateTime(2026, 8, 1).AddHours(1),
+            TotalSeats = 10,
         };
 
     [Fact]

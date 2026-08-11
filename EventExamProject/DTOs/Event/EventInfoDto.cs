@@ -9,6 +9,8 @@ public class EventInfoDto
     public string? Description { get; set; }
     public DateTime StartAt { get; set; }
     public DateTime EndAt { get; set; }
+    public int TotalSeats { get; set; }
+    public int AvailableSeats { get; set; }
 
     public static EventInfoDto FromEvent(EventExamProject.Models.Event @event) => new()
     {
@@ -16,6 +18,8 @@ public class EventInfoDto
         Title = @event.Title,
         Description = @event.Description,
         StartAt = @event.StartAt,
-        EndAt = @event.EndAt
+        EndAt = @event.EndAt,
+        TotalSeats = @event.TotalSeats,
+        AvailableSeats = @event.AvailableSeats
     };
 }

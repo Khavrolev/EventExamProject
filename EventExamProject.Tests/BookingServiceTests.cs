@@ -15,7 +15,8 @@ public class BookingServiceTests
             Title = title,
             Description = "Description",
             StartAt = new DateTime(2026, 8, 1),
-            EndAt = new DateTime(2026, 8, 1).AddHours(1)
+            EndAt = new DateTime(2026, 8, 1).AddHours(1),
+            TotalSeats = 10,
         };
 
     private static (BookingService BookingService, EventService EventService, InMemoryBookingStore BookingStore) CreateServices()
