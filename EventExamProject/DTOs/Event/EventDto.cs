@@ -18,7 +18,9 @@ public class EventDto
     [DateAfter(nameof(StartAt), ErrorMessageResourceType = typeof(ValidationMessages),
         ErrorMessageResourceName = "DateGreaterThan")]
     public DateTime EndAt { get; set; }
-    [Required(ErrorMessageResourceType = typeof(ValidationMessages), 
+    [Required(ErrorMessageResourceType = typeof(ValidationMessages),
         ErrorMessageResourceName = "FieldRequired")]
+    [Range(1, int.MaxValue, ErrorMessageResourceType = typeof(ValidationMessages),
+        ErrorMessageResourceName = "MustBeGreaterThanZero")]
     public int? TotalSeats { get; set; }
 }

@@ -75,4 +75,10 @@ public class BookingProcessingService(IBookingStore bookingStore, IEventStore ev
             }
         }
     }
+
+    public override void Dispose()
+    {
+        _processingSemaphore.Dispose();
+        base.Dispose();
+    }
 }

@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using EventExamProject.DataAccess.Interfaces;
 using EventExamProject.Exceptions;
 using EventExamProject.Models;
@@ -7,13 +8,14 @@ namespace EventExamProject.Services;
 
 public class BookingService(IBookingStore bookingStore, IEventStore eventStore, IEventService eventService) : IBookingService
 {
-    private readonly object _bookingLock = new();
+    private readonly ConcurrentDictionary<Guid, object> _eventLocks = new();
 
     public async Task<Booking> CreateBookingAsync(Guid eventId)
     {
         var foundEvent = await eventService.GetEventByIdAsync(eventId);
+        var eventLock = _eventLocks.GetOrAdd(eventId, _ => new object());
 
-        lock(_bookingLock){
+        lock(eventLock){
             if (!foundEvent.TryReserveSeats())
             {
                 throw new NoAvailableSeatsException("No available seats for this event");
