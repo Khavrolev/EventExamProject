@@ -28,5 +28,6 @@ public class Booking
     public void Reject()
     {
         Status = BookingStatus.Rejected;
+        ProcessedAt = DateTime.UtcNow;
     }
 }
