@@ -5,6 +5,8 @@ namespace EventExamProject.Services;
 
 public class BookingProcessingService(IBookingStore bookingStore, IEventStore eventStore, ILogger<BookingProcessingService> logger) : BackgroundService
 {
+    private const int PollingInterval = 5000;
+    private const int ProcessingDelay = 2000;
     private readonly SemaphoreSlim _processingSemaphore = new(1, 1);
     
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -18,7 +20,7 @@ public class BookingProcessingService(IBookingStore bookingStore, IEventStore ev
             var tasks = pendingBookings.Select(booking => ProcessBookingAsync(booking, stoppingToken));
             await Task.WhenAll(tasks); 
 
-            await Task.Delay(5000, stoppingToken);
+            await Task.Delay(PollingInterval, stoppingToken);
         }
     }
 
@@ -29,7 +31,7 @@ public class BookingProcessingService(IBookingStore bookingStore, IEventStore ev
         
         try
         {
-            await Task.Delay(2000, stoppingToken);
+            await Task.Delay(ProcessingDelay, stoppingToken);
             await _processingSemaphore.WaitAsync(stoppingToken);
             semaphoreTaken = true;
             
