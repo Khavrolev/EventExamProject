@@ -1,6 +1,6 @@
 namespace EventExamProject.DTOs.Pagination;
 
-public class PaginatedResult<T>
+public class PaginatedResultDto<T>
 {
     public List<T> Data { get; set; } = [];
     public int TotalCount { get; set; }

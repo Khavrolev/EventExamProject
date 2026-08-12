@@ -5,18 +5,30 @@ using EventExamProject.Services.Interfaces;
 
 namespace EventExamProject.Services;
 
-public class BookingService(IBookingStore bookingStore, IEventService eventService) : IBookingService
+public class BookingService(IBookingStore bookingStore, IEventStore eventStore, IEventService eventService) : IBookingService
 {
-    public async Task<Booking> CreateBooking(Guid eventId)
-    {
-        await eventService.GetEventById(eventId);
-        var newBookingEntity = Booking.CreatePending(eventId);
-        bookingStore.Add(newBookingEntity);
+    private readonly object _bookingLock = new();
 
-        return newBookingEntity;
+    public async Task<Booking> CreateBookingAsync(Guid eventId)
+    {
+        var foundEvent = await eventService.GetEventByIdAsync(eventId);
+
+        lock(_bookingLock){
+            if (!foundEvent.TryReserveSeats())
+            {
+                throw new NoAvailableSeatsException("No available seats for this event");
+            }
+
+            eventStore.Update(foundEvent);
+
+            var newBookingEntity = Booking.CreatePending(eventId);
+            bookingStore.Add(newBookingEntity);
+
+            return newBookingEntity;
+        }
     }
-    
-    public Task<Booking> GetBookingById(Guid id)
+
+    public Task<Booking> GetBookingByIdAsync(Guid id)
     {
         var foundBooking = bookingStore.GetById(id);
 

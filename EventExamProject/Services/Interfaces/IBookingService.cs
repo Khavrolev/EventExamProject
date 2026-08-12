@@ -4,6 +4,6 @@ namespace EventExamProject.Services.Interfaces;
 
 public interface IBookingService
 {
-    Task<Booking> CreateBooking(Guid eventId);
-    Task<Booking> GetBookingById(Guid id);
+    Task<Booking> CreateBookingAsync(Guid eventId);
+    Task<Booking> GetBookingByIdAsync(Guid id);
 }

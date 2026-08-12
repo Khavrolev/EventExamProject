@@ -1,4 +1,4 @@
-using EventExamProject.Models;
+using EventExamProject.DTOs.Booking;
 using EventExamProject.Services.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 
@@ -9,10 +9,12 @@ namespace EventExamProject.Controllers;
 public class BookingController (IBookingService bookingService) : ControllerBase
 {
     [HttpGet("{id:Guid}")]
-    public async Task<ActionResult<Booking>> GetBookingById(Guid id)
+    [ProducesResponseType(typeof(BookingInfoDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<BookingInfoDto>> GetBookingById(Guid id)
     {
-        var bookingById = await bookingService.GetBookingById(id);
-        
-        return Ok(bookingById);
+        var bookingById = await bookingService.GetBookingByIdAsync(id);
+
+        return Ok(BookingInfoDto.FromBooking(bookingById));
     }
 }

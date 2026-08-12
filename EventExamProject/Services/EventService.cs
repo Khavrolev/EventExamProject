@@ -19,7 +19,7 @@ public class EventService(IEventStore eventStore) : IEventService
         }
     }
 
-    public Task<PaginatedResult<Event>> GetAllEvents(EventFilterDto filter, PaginationParams paginationParams)
+    public Task<PaginatedResultDto<Event>> GetAllEventsAsync(EventFilterDto filter, PaginationParamsDto paginationParams)
     {
         var filtered = eventStore.GetAll();
 
@@ -45,19 +45,19 @@ public class EventService(IEventStore eventStore) : IEventService
             .Take(paginationParams.PageSize)
             .ToList();
 
-        return Task.FromResult(new PaginatedResult<Event> {
+        return Task.FromResult(new PaginatedResultDto<Event> {
             Data = paginated, TotalCount = filteredList.Count(), Page = paginationParams.Page, PageSize = paginationParams.PageSize
         });
     }
 
-    public Task<Event> GetEventById(Guid id)
+    public Task<Event> GetEventByIdAsync(Guid id)
     {
         var foundEvent = eventStore.GetById(id);
 
         return foundEvent == null ? throw new NotFoundException($"Event with id {id} was not found") : Task.FromResult(foundEvent);
     }
 
-    public Task<Event> CreateEvent(EventDto newEvent)
+    public Task<Event> CreateEventAsync(EventDto newEvent)
     {
         ValidateDates(newEvent);
 
@@ -67,7 +67,7 @@ public class EventService(IEventStore eventStore) : IEventService
         return Task.FromResult(newEventEntity);
     }
 
-    public Task<Event> UpdateEvent(Guid id, EventDto updatedEvent)
+    public Task<Event> UpdateEventAsync(Guid id, EventDto updatedEvent)
     {
         var existingEvent = eventStore.GetById(id);
 
@@ -84,7 +84,7 @@ public class EventService(IEventStore eventStore) : IEventService
         return Task.FromResult(existingEvent);
     }
 
-    public Task DeleteEvent(Guid id)
+    public Task DeleteEventAsync(Guid id)
     {
         var eventToDelete = eventStore.GetById(id);
 

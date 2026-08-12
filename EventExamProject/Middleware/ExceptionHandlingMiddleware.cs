@@ -64,6 +64,7 @@ public class ExceptionHandlingMiddleware
         {
             ValidationException => StatusCodes.Status400BadRequest,
             NotFoundException => StatusCodes.Status404NotFound,
+            NoAvailableSeatsException => StatusCodes.Status409Conflict,
             _ => StatusCodes.Status500InternalServerError,
         };
     
@@ -72,6 +73,7 @@ public class ExceptionHandlingMiddleware
         {
             ValidationException => "Bad request",
             NotFoundException => "Not Found",
+            NoAvailableSeatsException => "No available seats",
             _ => "Internal Server Error",
         };
 }

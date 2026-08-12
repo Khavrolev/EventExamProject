@@ -45,4 +45,18 @@ public class BookingTests
         booking.ProcessedAt.Should().NotBeNull();
         booking.ProcessedAt!.Value.Should().BeOnOrAfter(before).And.BeOnOrBefore(after);
     }
+
+    [Fact]
+    public void Reject_ShouldSetStatusToRejected_AndFillProcessedAt()
+    {
+        var booking = Booking.CreatePending(Guid.NewGuid());
+        var before = DateTime.UtcNow;
+
+        booking.Reject();
+
+        var after = DateTime.UtcNow;
+        booking.Status.Should().Be(BookingStatus.Rejected);
+        booking.ProcessedAt.Should().NotBeNull();
+        booking.ProcessedAt!.Value.Should().BeOnOrAfter(before).And.BeOnOrBefore(after);
+    }
 }
