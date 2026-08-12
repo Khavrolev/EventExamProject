@@ -24,4 +24,9 @@ public class Booking
         Status = BookingStatus.Confirmed;
         ProcessedAt = DateTime.UtcNow;
     }
+    
+    public void Reject()
+    {
+        Status = BookingStatus.Rejected;
+    }
 }
