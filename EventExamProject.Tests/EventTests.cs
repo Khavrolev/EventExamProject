@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using EventExamProject.DTOs.Event;
 using EventExamProject.Models;
 using FluentAssertions;
 
@@ -7,15 +8,13 @@ namespace EventExamProject.Tests;
 public class EventTests
 {
     private static Event CreateEvent(int totalSeats) =>
-        new()
+        Event.Create(new EventDto
         {
-            Id = Guid.NewGuid(),
             Title = "Event",
             StartAt = new DateTime(2026, 8, 1),
             EndAt = new DateTime(2026, 8, 1).AddHours(1),
             TotalSeats = totalSeats,
-            AvailableSeats = totalSeats,
-        };
+        });
 
     [Fact]
     public void TryReserveSeats_ShouldReturnTrue_AndDecreaseAvailableSeats_WhenSeatsAreAvailable()
@@ -42,7 +41,8 @@ public class EventTests
     [Fact]
     public void TryReserveSeats_ShouldReturnFalse_AndNotChangeAvailableSeats_WhenNoSeatsAreAvailable()
     {
-        var @event = CreateEvent(totalSeats: 0);
+        var @event = CreateEvent(totalSeats: 1);
+        @event.TryReserveSeats();
 
         var result = @event.TryReserveSeats();
 
