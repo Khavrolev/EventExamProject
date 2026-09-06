@@ -1,39 +1,47 @@
 using System.Collections.Concurrent;
-using EventExamProject.DataAccess.Interfaces;
+using EventExamProject.DataAccess;
 using EventExamProject.Exceptions;
 using EventExamProject.Models;
 using EventExamProject.Services.Interfaces;
 
 namespace EventExamProject.Services;
 
-public class BookingService(IBookingStore bookingStore, IEventStore eventStore, IEventService eventService) : IBookingService
+internal class BookingService(AppDbContext context) : IBookingService
 {
-    private readonly ConcurrentDictionary<Guid, object> _eventLocks = new();
+    private static readonly ConcurrentDictionary<Guid, SemaphoreSlim> EventSemaphores = new();
 
     public async Task<Booking> CreateBookingAsync(Guid eventId)
     {
-        var foundEvent = await eventService.GetEventByIdAsync(eventId);
-        var eventLock = _eventLocks.GetOrAdd(eventId, _ => new object());
+        var semaphore = EventSemaphores.GetOrAdd(eventId, _ => new SemaphoreSlim(1, 1));
+        await semaphore.WaitAsync();
 
-        lock(eventLock){
+        try
+        {
+            var foundEvent = await context.Events.FindAsync(eventId)
+                ?? throw new NotFoundException($"Event with id {eventId} was not found");
+
             if (!foundEvent.TryReserveSeats())
             {
                 throw new NoAvailableSeatsException("No available seats for this event");
             }
 
-            eventStore.Update(foundEvent);
-
             var newBookingEntity = Booking.CreatePending(eventId);
-            bookingStore.Add(newBookingEntity);
+            context.Bookings.Add(newBookingEntity);
+
+            await context.SaveChangesAsync();
 
             return newBookingEntity;
         }
+        finally
+        {
+            semaphore.Release();
+        }
     }
 
-    public Task<Booking> GetBookingByIdAsync(Guid id)
+    public async Task<Booking> GetBookingByIdAsync(Guid id)
     {
-        var foundBooking = bookingStore.GetById(id);
+        var foundBooking = await context.Bookings.FindAsync(id);
 
-        return foundBooking == null ? throw new NotFoundException($"Booking with id {id} was not found") : Task.FromResult(foundBooking);
+        return foundBooking ?? throw new NotFoundException($"Booking with id {id} was not found");
     }
 }

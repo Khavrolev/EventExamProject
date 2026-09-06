@@ -1,15 +1,16 @@
 using System.ComponentModel.DataAnnotations;
-using EventExamProject.DataAccess.Interfaces;
+using EventExamProject.DataAccess;
 using EventExamProject.DTOs.Event;
 using EventExamProject.DTOs.Pagination;
 using EventExamProject.Exceptions;
 using EventExamProject.Models;
 using EventExamProject.Resources;
 using EventExamProject.Services.Interfaces;
+using Microsoft.EntityFrameworkCore;
 
 namespace EventExamProject.Services;
 
-public class EventService(IEventStore eventStore) : IEventService
+internal class EventService(AppDbContext context) : IEventService
 {
     private static void ValidateDates(EventDto dto)
     {
@@ -19,57 +20,61 @@ public class EventService(IEventStore eventStore) : IEventService
         }
     }
 
-    public Task<PaginatedResultDto<Event>> GetAllEventsAsync(EventFilterDto filter, PaginationParamsDto paginationParams)
+    public async Task<PaginatedResultDto<Event>> GetAllEventsAsync(EventFilterDto filter, PaginationParamsDto paginationParams)
     {
-        var filtered = eventStore.GetAll();
+        var filtered = context.Events.AsQueryable();
 
         if (!string.IsNullOrEmpty(filter.Title))
         {
-            filtered = filtered.Where(e => e.Title.Contains(filter.Title, StringComparison.OrdinalIgnoreCase));
+            var title = filter.Title.ToLower();
+            filtered = filtered.Where(e => e.Title.ToLower().Contains(title));
         }
 
         if (filter.From.HasValue)
         {
-            filtered = filtered.Where(e=>e.StartAt >= filter.From);
+            filtered = filtered.Where(e => e.StartAt >= filter.From);
         }
 
         if (filter.To.HasValue)
         {
-            filtered = filtered.Where(e=>e.EndAt <= filter.To);
+            filtered = filtered.Where(e => e.EndAt <= filter.To);
         }
 
-        var filteredList = filtered.ToList();
+        var totalCount = await filtered.CountAsync();
 
-        var paginated = filteredList
+        var paginated = await filtered
             .Skip((paginationParams.Page - 1) * paginationParams.PageSize)
             .Take(paginationParams.PageSize)
-            .ToList();
+            .ToListAsync();
 
-        return Task.FromResult(new PaginatedResultDto<Event> {
-            Data = paginated, TotalCount = filteredList.Count(), Page = paginationParams.Page, PageSize = paginationParams.PageSize
-        });
+        return new PaginatedResultDto<Event>
+        {
+            Data = paginated, TotalCount = totalCount, Page = paginationParams.Page, PageSize = paginationParams.PageSize
+        };
     }
 
-    public Task<Event> GetEventByIdAsync(Guid id)
+    public async Task<Event> GetEventByIdAsync(Guid id)
     {
-        var foundEvent = eventStore.GetById(id);
+        var foundEvent = await context.Events.FindAsync(id);
 
-        return foundEvent == null ? throw new NotFoundException($"Event with id {id} was not found") : Task.FromResult(foundEvent);
+        return foundEvent ?? throw new NotFoundException($"Event with id {id} was not found");
     }
 
-    public Task<Event> CreateEventAsync(EventDto newEvent)
+    public async Task<Event> CreateEventAsync(EventDto newEvent)
     {
         ValidateDates(newEvent);
 
         var newEventEntity = Event.Create(newEvent);
-        eventStore.Add(newEventEntity);
+        context.Events.Add(newEventEntity);
 
-        return Task.FromResult(newEventEntity);
+        await context.SaveChangesAsync();
+
+        return newEventEntity;
     }
 
-    public Task<Event> UpdateEventAsync(Guid id, EventDto updatedEvent)
+    public async Task<Event> UpdateEventAsync(Guid id, EventDto updatedEvent)
     {
-        var existingEvent = eventStore.GetById(id);
+        var existingEvent = await context.Events.FindAsync(id);
 
         if (existingEvent == null)
         {
@@ -79,23 +84,23 @@ public class EventService(IEventStore eventStore) : IEventService
         ValidateDates(updatedEvent);
 
         existingEvent.Update(updatedEvent);
-        eventStore.Update(existingEvent);
 
-        return Task.FromResult(existingEvent);
+        await context.SaveChangesAsync();
+
+        return existingEvent;
     }
 
-    public Task DeleteEventAsync(Guid id)
+    public async Task DeleteEventAsync(Guid id)
     {
-        var eventToDelete = eventStore.GetById(id);
+        var eventToDelete = await context.Events.FindAsync(id);
 
         if (eventToDelete == null)
         {
             throw new NotFoundException($"Event with id {id} was not found");
-
         }
 
-        eventStore.Delete(eventToDelete);
+        context.Events.Remove(eventToDelete);
 
-        return Task.CompletedTask;
+        await context.SaveChangesAsync();
     }
 }
