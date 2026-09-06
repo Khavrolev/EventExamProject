@@ -56,5 +56,11 @@ namespace EventExamProject.Resources {
                 return ResourceManager.GetString("DateGreaterThan", resourceCulture);
             }
         }
+
+        internal static string MustBeGreaterThanZero {
+            get {
+                return ResourceManager.GetString("MustBeGreaterThanZero", resourceCulture);
+            }
+        }
     }
 }
