@@ -1,11 +1,11 @@
-using EventExamProject.DataAccess;
+using EventExamProject.DataAccess.Interfaces;
 using EventExamProject.Exceptions;
 using EventExamProject.Models;
 using EventExamProject.Services.Interfaces;
 
 namespace EventExamProject.Services;
 
-internal class BookingService(AppDbContext context) : IBookingService
+internal class BookingService(IEventRepository eventRepository, IBookingRepository bookingRepository) : IBookingService
 {
     private static readonly SemaphoreSlim BookingLock = new(1, 1);
 
@@ -15,7 +15,7 @@ internal class BookingService(AppDbContext context) : IBookingService
 
         try
         {
-            var foundEvent = await context.Events.FindAsync(eventId)
+            var foundEvent = await eventRepository.GetByIdAsync(eventId)
                 ?? throw new NotFoundException($"Event with id {eventId} was not found");
 
             if (!foundEvent.TryReserveSeats())
@@ -23,10 +23,10 @@ internal class BookingService(AppDbContext context) : IBookingService
                 throw new NoAvailableSeatsException("No available seats for this event");
             }
 
-            var newBookingEntity = Booking.CreatePending(eventId);
-            context.Bookings.Add(newBookingEntity);
+            await eventRepository.UpdateAsync(foundEvent);
 
-            await context.SaveChangesAsync();
+            var newBookingEntity = Booking.CreatePending(eventId);
+            await bookingRepository.AddAsync(newBookingEntity);
 
             return newBookingEntity;
         }
@@ -38,7 +38,7 @@ internal class BookingService(AppDbContext context) : IBookingService
 
     public async Task<Booking> GetBookingByIdAsync(Guid id)
     {
-        var foundBooking = await context.Bookings.FindAsync(id);
+        var foundBooking = await bookingRepository.GetByIdAsync(id);
 
         return foundBooking ?? throw new NotFoundException($"Booking with id {id} was not found");
     }

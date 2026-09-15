@@ -1,5 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using EventExamProject.DataAccess;
+using EventExamProject.DataAccess.Interfaces;
+using EventExamProject.DataAccess.Repositories;
 using EventExamProject.DTOs.Event;
 using EventExamProject.DTOs.Pagination;
 using EventExamProject.Exceptions;
@@ -23,6 +25,7 @@ public class EventServiceTests : IDisposable
         var services = new ServiceCollection();
 
         services.AddDbContext<AppDbContext>(options => options.UseInMemoryDatabase(dbName));
+        services.AddScoped<IEventRepository, EventRepository>();
         services.AddScoped<IEventService, EventService>();
 
         _serviceProvider = services.BuildServiceProvider();

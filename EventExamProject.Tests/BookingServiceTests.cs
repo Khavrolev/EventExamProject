@@ -1,4 +1,6 @@
 using EventExamProject.DataAccess;
+using EventExamProject.DataAccess.Interfaces;
+using EventExamProject.DataAccess.Repositories;
 using EventExamProject.DTOs.Event;
 using EventExamProject.Exceptions;
 using EventExamProject.Models;
@@ -24,6 +26,8 @@ public class BookingServiceTests : IDisposable
         var services = new ServiceCollection();
 
         services.AddDbContext<AppDbContext>(options => options.UseInMemoryDatabase(dbName));
+        services.AddScoped<IEventRepository, EventRepository>();
+        services.AddScoped<IBookingRepository, BookingRepository>();
         services.AddScoped<IEventService, EventService>();
         services.AddScoped<IBookingService, BookingService>();
 
