@@ -5,6 +5,7 @@
 
 - [.NET 10 SDK](https://dotnet.microsoft.com/download)
 - PostgreSQL (локально или в Docker) — приложение хранит данные в БД, а не в памяти
+- Docker — нужен для интеграционных тестов (`EventExamProject.IntegrationTests`), которые сами поднимают контейнер с PostgreSQL через Testcontainers
 
 ## Сборка
 
@@ -34,7 +35,29 @@ docker run -d --name eventapi-postgres \
   -p 5454:5432 postgres:16-alpine
 ```
 
-Схема БД (таблицы `events` и `bookings`) создаётся автоматически при первом запуске приложения через `Database.EnsureCreated()` (вызывается в `Program.cs` сразу после `builder.Build()`) — отдельно накатывать миграции не нужно. При последующих запусках метод ничего не делает, если схема уже существует. `EnsureCreated` несовместим с миграциями EF Core — если в будущем понадобятся миграции, схему нужно будет пересоздать или перейти на `Database.Migrate()`.
+Схема БД (таблицы `events`, `bookings`, внешний ключ `bookings.EventId → events.Id`) управляется миграциями EF Core, а не создаётся автоматически «по слепку» модели. При каждом запуске приложение само применяет все ещё не применённые миграции: в `Program.cs` сразу после `builder.Build()` создаётся scope и вызывается `db.Database.Migrate()`. Если БД пустая — миграции создадут схему с нуля; если часть миграций уже применена — накатятся только новые. Ручных `CREATE TABLE`/`ALTER TABLE` выполнять не нужно.
+
+## Миграции
+
+Миграции лежат в `EventExamProject/Migrations/`. Для работы с ними нужен инструмент `dotnet-ef` (устанавливается один раз):
+```bash
+dotnet tool install --global dotnet-ef
+```
+
+Создать новую миграцию после изменения моделей/конфигураций EF Core (из папки `EventExamProject/`):
+```bash
+dotnet ef migrations add <ИмяМиграции>
+```
+
+Применить миграции к БД вручную, не запуская приложение (обычно не требуется — `Program.cs` делает это сам при старте):
+```bash
+dotnet ef database update
+```
+
+Откатить последнюю ещё не применённую миграцию (если она не подошла):
+```bash
+dotnet ef migrations remove
+```
 
 ## Запуск
 
@@ -55,9 +78,13 @@ http://localhost:5278/swagger/index.html
 
 ## Тесты
 
-Юнит-тесты лежат в отдельном проекте `EventExamProject.Tests` (xUnit) и покрывают бизнес-логику `EventService` и `BookingService`: успешные CRUD-сценарии, фильтрацию, пагинацию, создание и получение бронирований, а также обработку ошибочных сценариев (несуществующий id, некорректные даты, бронь для несуществующего или удалённого мероприятия).
+Тесты разделены на два проекта: юнит-тесты (`EventExamProject.Tests`) на InMemory-провайдере EF Core и интеграционные (`EventExamProject.IntegrationTests`) на реальном PostgreSQL через Testcontainers.
 
-Тесты сервисов не ходят в реальный PostgreSQL — вместо этого используется InMemory-провайдер EF Core (`Microsoft.EntityFrameworkCore.InMemory`). Каждый тестовый класс (`EventServiceTests`, `BookingServiceTests`) в конструкторе собирает свой `ServiceCollection`, регистрирует `AppDbContext` с `UseInMemoryDatabase(dbName)` (уникальное имя базы на класс, чтобы тесты не влияли друг на друга) и сервисы как `Scoped`, после чего резолвит их через `IServiceProvider`/`IServiceScope` — так же, как это делает ASP.NET Core в реальном приложении. Тесты на конкурентность создают отдельный `scope` (и, соответственно, отдельный `AppDbContext`) на каждый параллельный запрос, а не расшаривают один и тот же контекст между потоками.
+### Юнит-тесты
+
+Лежат в `EventExamProject.Tests` (xUnit) и покрывают бизнес-логику `EventService` и `BookingService`: успешные CRUD-сценарии, фильтрацию, пагинацию, создание и получение бронирований, а также обработку ошибочных сценариев (несуществующий id, некорректные даты, бронь для несуществующего или удалённого мероприятия).
+
+Тесты сервисов не ходят в реальный PostgreSQL — вместо этого используется InMemory-провайдер EF Core (`Microsoft.EntityFrameworkCore.InMemory`). Каждый тестовый класс (`EventServiceTests`, `BookingServiceTests`) в конструкторе собирает свой `ServiceCollection`, регистрирует `AppDbContext` с `UseInMemoryDatabase(dbName)` (уникальное имя базы на класс, чтобы тесты не влияли друг на друга), репозитории (`IEventRepository`/`IBookingRepository`) и сервисы как `Scoped`, после чего резолвит их через `IServiceProvider`/`IServiceScope` — так же, как это делает ASP.NET Core в реальном приложении. Тесты на конкурентность создают отдельный `scope` (и, соответственно, отдельный `AppDbContext`) на каждый параллельный запрос, а не расшаривают один и тот же контекст между потоками.
 
 Отдельно покрыта логика мест и потокобезопасность:
 - `EventTests.cs` — `TryReserveSeats`/`ReleaseSeats` на уровне модели `Event` (успешная резервация, отказ при нехватке мест, резервация последнего места, ошибка при попытке освободить больше мест, чем занято).
@@ -67,6 +94,24 @@ http://localhost:5278/swagger/index.html
 Из папки проекта (`EventExamProject/`):
 ```bash
 dotnet test
+```
+
+### Интеграционные тесты
+
+Лежат в `EventExamProject.IntegrationTests` и проверяют слой доступа к данным (`EventRepository`, `BookingRepository`) на настоящем PostgreSQL, а не на InMemory-провайдере — то есть реально пишут и читают строки через миграции EF Core применённые к живой БД.
+
+**Для запуска нужен запущенный Docker** — тесты сами поднимают контейнер `postgres:16-alpine` через [Testcontainers](https://dotnet.testcontainers.org/) (`Testcontainers.PostgreSql`), без ручной подготовки БД.
+
+Особенности реализации:
+- Один контейнер Postgres поднимается один раз на весь тестовый прогон (`DatabaseFixture` + `[CollectionDefinition]`/`[Collection]`), а не по контейнеру на каждый тестовый класс.
+- Перед **каждым** тестом схема приводится к чистому состоянию: `Database.EnsureDeletedAsync()` + `Database.MigrateAsync()` (в `RepositoryTestBase.InitializeAsync`) — тесты изолированы и не зависят от порядка запуска.
+- `EventRepositoryTests` покрывает все методы (`GetAllAsync`, `GetByIdAsync`, `AddAsync`, `UpdateAsync`, `DeleteAsync`), включая все вариации фильтров (`Title`, `From`, `To`, их комбинации, граничные значения дат) и пагинацию (обычная страница, страница за пределами данных, `PageSize = 0`).
+- `BookingRepositoryTests` покрывает CRUD и отдельно `GetPendingBookingIdsAsync` (используется фоновым сервисом) — проверяется, что в выборку попадают только брони со статусом `Pending`.
+- Изменения проверяются через **отдельный** `AppDbContext`, указывающий на тот же контейнер, а не через тот же трекнутый экземпляр — так тест подтверждает, что данные реально попали в БД, а не просто остались в change tracker'е.
+
+Запуск (Docker должен быть запущен):
+```bash
+dotnet test EventExamProject.IntegrationTests/EventExamProject.IntegrationTests.csproj
 ```
 
 ## API
@@ -209,7 +254,7 @@ curl -i -X POST http://localhost:5278/events/$EVENT_ID/book
 | `createdAt`   | DateTime      | Дата создания брони                                        |
 | `processedAt` | DateTime?     | Дата обработки, заполняется фоновым сервисом               |
 
-Хранится в PostgreSQL (таблица `bookings`), доступ — через `AppDbContext` (Entity Framework Core), аналогично мероприятиям.
+Хранится в PostgreSQL (таблица `bookings`). Сервисы (`EventService`, `BookingService`) не обращаются к `AppDbContext` напрямую — вся работа с данными инкапсулирована в репозиториях `IEventRepository`/`IBookingRepository` (`EventExamProject/DataAccess/Repositories`), зарегистрированных в DI как `Scoped`.
 
 ## Фоновая обработка бронирований
 
