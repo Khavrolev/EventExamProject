@@ -120,6 +120,28 @@ public class EventRepositoryTests(DatabaseFixture fixture) : RepositoryTestBase(
     }
 
     [Fact]
+    public async Task DeleteAsync_ShouldCascadeDeleteItsBookings()
+    {
+        // Arrange
+        var repository = new EventRepository(Context);
+        var eventWithBooking = CreateEvent();
+        await repository.AddAsync(eventWithBooking);
+
+        var booking = Booking.CreatePending(eventWithBooking.Id);
+        Context.Bookings.Add(booking);
+        await Context.SaveChangesAsync();
+
+        // Act
+        await repository.DeleteAsync(eventWithBooking);
+
+        // Assert
+        await using var verificationContext = CreateContext();
+        var storedBooking = await verificationContext.Bookings.FindAsync(booking.Id);
+
+        storedBooking.Should().BeNull("the foreign key is configured with ON DELETE CASCADE");
+    }
+
+    [Fact]
     public async Task GetAllAsync_ShouldReturnAllEvents_WhenNoFiltersApplied()
     {
         // Arrange

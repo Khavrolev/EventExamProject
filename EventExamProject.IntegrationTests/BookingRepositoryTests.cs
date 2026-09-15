@@ -3,6 +3,7 @@ using EventExamProject.DTOs.Event;
 using EventExamProject.IntegrationTests.Infrastructure;
 using EventExamProject.Models;
 using FluentAssertions;
+using Microsoft.EntityFrameworkCore;
 
 namespace EventExamProject.IntegrationTests;
 
@@ -159,5 +160,19 @@ public class BookingRepositoryTests(DatabaseFixture fixture) : RepositoryTestBas
 
         // Assert
         pendingIds.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task AddAsync_ShouldThrow_WhenEventDoesNotExist()
+    {
+        // Arrange
+        var repository = new BookingRepository(Context);
+        var booking = Booking.CreatePending(Guid.NewGuid());
+
+        // Act
+        var act = () => repository.AddAsync(booking);
+
+        // Assert
+        await act.Should().ThrowAsync<DbUpdateException>("the foreign key to events should reject an unknown EventId");
     }
 }
