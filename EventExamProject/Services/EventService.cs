@@ -1,16 +1,15 @@
 using System.ComponentModel.DataAnnotations;
-using EventExamProject.DataAccess;
+using EventExamProject.DataAccess.Interfaces;
 using EventExamProject.DTOs.Event;
 using EventExamProject.DTOs.Pagination;
 using EventExamProject.Exceptions;
 using EventExamProject.Models;
 using EventExamProject.Resources;
 using EventExamProject.Services.Interfaces;
-using Microsoft.EntityFrameworkCore;
 
 namespace EventExamProject.Services;
 
-internal class EventService(AppDbContext context) : IEventService
+internal class EventService(IEventRepository eventRepository) : IEventService
 {
     private static void ValidateDates(EventDto dto)
     {
@@ -22,40 +21,12 @@ internal class EventService(AppDbContext context) : IEventService
 
     public async Task<PaginatedResultDto<Event>> GetAllEventsAsync(EventFilterDto filter, PaginationParamsDto paginationParams)
     {
-        var filtered = context.Events.AsQueryable();
-
-        if (!string.IsNullOrEmpty(filter.Title))
-        {
-            var title = filter.Title.ToLower();
-            filtered = filtered.Where(e => e.Title.ToLower().Contains(title));
-        }
-
-        if (filter.From.HasValue)
-        {
-            filtered = filtered.Where(e => e.StartAt >= filter.From);
-        }
-
-        if (filter.To.HasValue)
-        {
-            filtered = filtered.Where(e => e.EndAt <= filter.To);
-        }
-
-        var totalCount = await filtered.CountAsync();
-
-        var paginated = await filtered
-            .Skip((paginationParams.Page - 1) * paginationParams.PageSize)
-            .Take(paginationParams.PageSize)
-            .ToListAsync();
-
-        return new PaginatedResultDto<Event>
-        {
-            Data = paginated, TotalCount = totalCount, Page = paginationParams.Page, PageSize = paginationParams.PageSize
-        };
+        return await eventRepository.GetAllAsync(filter, paginationParams);
     }
 
     public async Task<Event> GetEventByIdAsync(Guid id)
     {
-        var foundEvent = await context.Events.FindAsync(id);
+        var foundEvent = await eventRepository.GetByIdAsync(id);
 
         return foundEvent ?? throw new NotFoundException($"Event with id {id} was not found");
     }
@@ -65,16 +36,14 @@ internal class EventService(AppDbContext context) : IEventService
         ValidateDates(newEvent);
 
         var newEventEntity = Event.Create(newEvent);
-        context.Events.Add(newEventEntity);
-
-        await context.SaveChangesAsync();
+        await eventRepository.AddAsync(newEventEntity);
 
         return newEventEntity;
     }
 
     public async Task<Event> UpdateEventAsync(Guid id, EventDto updatedEvent)
     {
-        var existingEvent = await context.Events.FindAsync(id);
+        var existingEvent = await eventRepository.GetByIdAsync(id);
 
         if (existingEvent == null)
         {
@@ -85,22 +54,20 @@ internal class EventService(AppDbContext context) : IEventService
 
         existingEvent.Update(updatedEvent);
 
-        await context.SaveChangesAsync();
+        await eventRepository.UpdateAsync(existingEvent);
 
         return existingEvent;
     }
 
     public async Task DeleteEventAsync(Guid id)
     {
-        var eventToDelete = await context.Events.FindAsync(id);
+        var eventToDelete = await eventRepository.GetByIdAsync(id);
 
         if (eventToDelete == null)
         {
             throw new NotFoundException($"Event with id {id} was not found");
         }
 
-        context.Events.Remove(eventToDelete);
-
-        await context.SaveChangesAsync();
+        await eventRepository.DeleteAsync(eventToDelete);
     }
 }

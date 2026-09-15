@@ -1,6 +1,4 @@
-using EventExamProject.DataAccess;
-using EventExamProject.Models;
-using Microsoft.EntityFrameworkCore;
+using EventExamProject.DataAccess.Interfaces;
 
 namespace EventExamProject.Services;
 
@@ -19,12 +17,9 @@ internal class BookingProcessingService(IServiceScopeFactory scopeFactory, ILogg
 
             using (var scope = scopeFactory.CreateScope())
             {
-                var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                var bookingRepository = scope.ServiceProvider.GetRequiredService<IBookingRepository>();
 
-                pendingBookingIds = await context.Bookings
-                    .Where(b => b.Status == BookingStatus.Pending)
-                    .Select(b => b.Id)
-                    .ToListAsync(stoppingToken);
+                pendingBookingIds = await bookingRepository.GetPendingBookingIdsAsync(stoppingToken);
             }
 
             var tasks = pendingBookingIds.Select(id => ProcessBookingAsync(id, stoppingToken));
@@ -41,16 +36,17 @@ internal class BookingProcessingService(IServiceScopeFactory scopeFactory, ILogg
         try
         {
             using var scope = scopeFactory.CreateScope();
-            var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var bookingRepository = scope.ServiceProvider.GetRequiredService<IBookingRepository>();
+            var eventRepository = scope.ServiceProvider.GetRequiredService<IEventRepository>();
 
-            var booking = await context.Bookings.FindAsync([bookingId], stoppingToken);
+            var booking = await bookingRepository.GetByIdAsync(bookingId, stoppingToken);
 
             if (booking == null)
             {
                 return;
             }
 
-            var eventEntity = await context.Events.FindAsync([booking.EventId], stoppingToken);
+            var eventEntity = await eventRepository.GetByIdAsync(booking.EventId, stoppingToken);
 
             if (eventEntity == null)
             {
@@ -63,7 +59,7 @@ internal class BookingProcessingService(IServiceScopeFactory scopeFactory, ILogg
                 logger.LogInformation("Booking {BookingId} confirmed", booking.Id);
             }
 
-            await context.SaveChangesAsync(stoppingToken);
+            await bookingRepository.UpdateAsync(booking);
         }
         catch (OperationCanceledException)
         {
@@ -74,9 +70,10 @@ internal class BookingProcessingService(IServiceScopeFactory scopeFactory, ILogg
             logger.LogError(ex, "Failed to process booking {BookingId}", bookingId);
 
             using var scope = scopeFactory.CreateScope();
-            var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var bookingRepository = scope.ServiceProvider.GetRequiredService<IBookingRepository>();
+            var eventRepository = scope.ServiceProvider.GetRequiredService<IEventRepository>();
 
-            var booking = await context.Bookings.FindAsync([bookingId], stoppingToken);
+            var booking = await bookingRepository.GetByIdAsync(bookingId, stoppingToken);
 
             if (booking == null)
             {
@@ -85,10 +82,15 @@ internal class BookingProcessingService(IServiceScopeFactory scopeFactory, ILogg
 
             booking.Reject();
 
-            var eventEntity = await context.Events.FindAsync([booking.EventId], stoppingToken);
+            var eventEntity = await eventRepository.GetByIdAsync(booking.EventId, stoppingToken);
             eventEntity?.ReleaseSeats();
 
-            await context.SaveChangesAsync(stoppingToken);
+            await bookingRepository.UpdateAsync(booking);
+
+            if (eventEntity != null)
+            {
+                await eventRepository.UpdateAsync(eventEntity);
+            }
         }
     }
 }

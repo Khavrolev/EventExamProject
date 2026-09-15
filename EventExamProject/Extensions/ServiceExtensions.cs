@@ -1,4 +1,6 @@
 using EventExamProject.DataAccess;
+using EventExamProject.DataAccess.Interfaces;
+using EventExamProject.DataAccess.Repositories;
 using EventExamProject.Services;
 using EventExamProject.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
@@ -13,6 +15,9 @@ public static class ServiceExtensions
 
         services.AddDbContext<AppDbContext>(options =>
             options.UseNpgsql(configuration.GetConnectionString("DefaultConnection")));
+
+        services.AddScoped<IEventRepository, EventRepository>();
+        services.AddScoped<IBookingRepository, BookingRepository>();
 
         services.AddScoped<IEventService, EventService>();
         services.AddScoped<IBookingService, BookingService>();
