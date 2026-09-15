@@ -25,6 +25,13 @@ internal sealed class BookingRepository(AppDbContext context) : IBookingReposito
 
     public async Task UpdateAsync(Booking booking)
     {
+        context.Bookings.Update(booking);
+        await context.SaveChangesAsync();
+    }
+
+    public async Task DeleteAsync(Booking booking)
+    {
+        context.Bookings.Remove(booking);
         await context.SaveChangesAsync();
     }
 }

@@ -50,6 +50,25 @@ public class BookingRepositoryTests(DatabaseFixture fixture) : RepositoryTestBas
     }
 
     [Fact]
+    public async Task DeleteAsync_ShouldRemoveBooking_FromDatabase()
+    {
+        // Arrange
+        var seededEvent = await SeedEventAsync();
+        var repository = new BookingRepository(Context);
+        var booking = Booking.CreatePending(seededEvent.Id);
+        await repository.AddAsync(booking);
+
+        // Act
+        await repository.DeleteAsync(booking);
+
+        // Assert
+        await using var verificationContext = CreateContext();
+        var stored = await verificationContext.Bookings.FindAsync(booking.Id);
+
+        stored.Should().BeNull();
+    }
+
+    [Fact]
     public async Task GetByIdAsync_ShouldReturnBooking_WhenBookingExists()
     {
         // Arrange

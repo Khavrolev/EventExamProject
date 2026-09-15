@@ -20,12 +20,14 @@ internal sealed class EventRepository(AppDbContext context) : IEventRepository
 
         if (filter.From.HasValue)
         {
-            filtered = filtered.Where(e => e.StartAt >= filter.From);
+            var from = Event.NormalizeToUtcConvention(filter.From.Value);
+            filtered = filtered.Where(e => e.StartAt >= from);
         }
 
         if (filter.To.HasValue)
         {
-            filtered = filtered.Where(e => e.EndAt <= filter.To);
+            var to = Event.NormalizeToUtcConvention(filter.To.Value);
+            filtered = filtered.Where(e => e.EndAt <= to);
         }
 
         var totalCount = await filtered.CountAsync();
@@ -54,6 +56,7 @@ internal sealed class EventRepository(AppDbContext context) : IEventRepository
 
     public async Task UpdateAsync(Event existingEvent)
     {
+        context.Events.Update(existingEvent);
         await context.SaveChangesAsync();
     }
 

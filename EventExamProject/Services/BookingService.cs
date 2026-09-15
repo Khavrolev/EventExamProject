@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using EventExamProject.DataAccess.Interfaces;
 using EventExamProject.Exceptions;
 using EventExamProject.Models;
@@ -7,11 +8,15 @@ namespace EventExamProject.Services;
 
 internal class BookingService(IEventRepository eventRepository, IBookingRepository bookingRepository) : IBookingService
 {
-    private static readonly SemaphoreSlim BookingLock = new(1, 1);
+    private static readonly ConcurrentDictionary<Guid, SemaphoreSlim> EventLocks = new();
+
+    private static SemaphoreSlim GetLockFor(Guid eventId) =>
+        EventLocks.GetOrAdd(eventId, static _ => new SemaphoreSlim(1, 1));
 
     public async Task<Booking> CreateBookingAsync(Guid eventId)
     {
-        await BookingLock.WaitAsync();
+        var eventLock = GetLockFor(eventId);
+        await eventLock.WaitAsync();
 
         try
         {
@@ -32,7 +37,7 @@ internal class BookingService(IEventRepository eventRepository, IBookingReposito
         }
         finally
         {
-            BookingLock.Release();
+            eventLock.Release();
         }
     }
 
