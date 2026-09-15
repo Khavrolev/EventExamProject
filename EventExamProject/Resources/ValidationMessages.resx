@@ -24,4 +24,7 @@
     <data name="DateGreaterThan" xml:space="preserve">
         <value>{0} must be later than {1}</value>
     </data>
+    <data name="MustBeGreaterThanZero" xml:space="preserve">
+        <value>The {0} field must be greater than 0</value>
+    </data>
 </root>

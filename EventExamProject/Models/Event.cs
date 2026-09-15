@@ -12,6 +12,12 @@ public class Event
     public DateTime EndAt { get; set; }
     public required int TotalSeats { get; set; }
     public required int AvailableSeats { get; set; }
+    public ICollection<Booking> Bookings { get; set; } = new List<Booking>();
+
+    private Event()
+    {
+        Title = null!;
+    }
 
     public static Event Create(EventDto dto)
     {
