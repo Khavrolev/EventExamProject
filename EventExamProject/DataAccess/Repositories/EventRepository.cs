@@ -31,6 +31,8 @@ internal sealed class EventRepository(AppDbContext context) : IEventRepository
         var totalCount = await filtered.CountAsync();
 
         var paginated = await filtered
+            .OrderBy(e => e.StartAt)
+            .ThenBy(e => e.Id)
             .Skip((paginationParams.Page - 1) * paginationParams.PageSize)
             .Take(paginationParams.PageSize)
             .ToListAsync();

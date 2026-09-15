@@ -138,9 +138,12 @@ public class EventServiceTests : IDisposable
     [Fact]
     public async Task GetAllEvents_ShouldReturnCorrectPage_WhenPaginationApplied()
     {
+        var baseDate = new DateTime(2026, 8, 1);
+
         for (var i = 1; i <= 5; i++)
         {
-            await _service.CreateEventAsync(CreateValidDto($"Event {i}"));
+            var startAt = baseDate.AddDays(i);
+            await _service.CreateEventAsync(CreateValidDto($"Event {i}", startAt, startAt.AddHours(1)));
         }
 
         var result = await _service.GetAllEventsAsync(new EventFilterDto(), new PaginationParamsDto { Page = 2, PageSize = 2 });

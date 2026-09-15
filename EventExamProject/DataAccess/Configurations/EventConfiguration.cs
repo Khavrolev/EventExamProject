@@ -21,6 +21,12 @@ internal sealed class EventConfiguration : IEntityTypeConfiguration<Event>
         builder.Property(e => e.Description)
             .HasMaxLength(1000);
 
+        builder.Property(e => e.StartAt)
+            .HasColumnType("timestamp without time zone");
+
+        builder.Property(e => e.EndAt)
+            .HasColumnType("timestamp without time zone");
+
         builder.Property(e => e.TotalSeats)
             .IsRequired();
 

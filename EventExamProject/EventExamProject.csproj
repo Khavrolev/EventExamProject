@@ -19,6 +19,7 @@
 
     <ItemGroup>
         <InternalsVisibleTo Include="EventExamProject.Tests" />
+        <InternalsVisibleTo Include="EventExamProject.IntegrationTests" />
     </ItemGroup>
 
     <ItemGroup>
