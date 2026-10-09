@@ -1,6 +1,6 @@
-using EventExamProject.Extensions;
+using EventExamProject.Presentation.Extensions;
 using EventExamProject.Infrastructure;
-using EventExamProject.Middleware;
+using EventExamProject.Presentation.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
 

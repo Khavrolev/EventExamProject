@@ -1,6 +1,6 @@
 using Microsoft.OpenApi;
 
-namespace EventExamProject.Extensions;
+namespace EventExamProject.Presentation.Extensions;
 
 public static class SwaggerExtensions
 {

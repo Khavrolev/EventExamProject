@@ -2,7 +2,7 @@ using EventExamProject.Application.DTOs.Booking;
 using EventExamProject.Application.Services.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 
-namespace EventExamProject.Controllers;
+namespace EventExamProject.Presentation.Controllers;
 
 [ApiController]
 [Route("bookings")]
@@ -15,6 +15,6 @@ public class BookingController (IBookingService bookingService) : ControllerBase
     {
         var bookingById = await bookingService.GetBookingByIdAsync(id);
 
-        return Ok(BookingInfoDto.FromBooking(bookingById));
+        return Ok(bookingById);
     }
 }

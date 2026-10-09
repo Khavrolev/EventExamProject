@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 
-namespace EventExamProject.Extensions;
+namespace EventExamProject.Presentation.Extensions;
 
 public static class ProblemDetailsExtensions
 {

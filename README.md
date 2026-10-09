@@ -12,7 +12,7 @@
 Решение разбито на четыре отдельные сборки (`.csproj`) по принципам чистой архитектуры. Зависимости между ними направлены только «внутрь» и проверяются компилятором через `<ProjectReference>`:
 
 ```
-EventExamProject (Presentation)
+EventExamProject.Presentation
         │
         ├──▶ EventExamProject.Application
         │            │
@@ -24,23 +24,23 @@ EventExamProject (Presentation)
                      └──▶ EventExamProject.Domain
 ```
 
-- **`EventExamProject.Domain`** — доменные сущности (`Event`, `Booking`), перечисление `BookingStatus`, value object `EventDetails`, доменные исключения (`NotFoundException`, `NoAvailableSeatsException`). Не зависит ни от одного фреймворка (ASP.NET Core, EF Core) и ни от одного другого проекта решения.
-- **`EventExamProject.Application`** — бизнес-логика (use cases): `EventService`, `BookingService`, фоновый `BookingProcessingService`; интерфейсы портов `IEventRepository`/`IBookingRepository` (абстракции доступа к данным — что нужно бизнес-логике от хранилища, а не как оно устроено); DTO (`EventDto`, `EventInfoDto`, `BookingInfoDto`, `PaginatedResultDto` и т.д.); extension-метод `AddApplicationServices()` для регистрации в DI. Зависит только от `Domain` — ни одной ссылки на `Infrastructure`.
+- **`EventExamProject.Domain`** — доменные сущности (`Event`, `Booking`), перечисление `BookingStatus`, value object `EventDetails`, доменные исключения (`NotFoundException`, `NoAvailableSeatsException`, `DomainValidationException`). Не зависит ни от одного фреймворка (ASP.NET Core, EF Core) и ни от одного другого проекта решения.
+- **`EventExamProject.Application`** — бизнес-логика (use cases): `EventService`, `BookingService`, фоновый `BookingProcessingService`; интерфейсы портов `IEventRepository`/`IBookingRepository` (абстракции доступа к данным — что нужно бизнес-логике от хранилища, а не как оно устроено); DTO (`EventDto`, `EventInfoDto`, `BookingInfoDto`, `PaginatedResultDto` и т.д.) — сервисы возвращают уже готовые DTO, а не доменные сущности; extension-метод `AddApplicationServices()` для регистрации в DI. Зависит только от `Domain` — ни одной ссылки на `Infrastructure`.
 - **`EventExamProject.Infrastructure`** — реализация портов, объявленных в `Application`: `AppDbContext`, конфигурации EF Core (`EventConfiguration`, `BookingConfiguration`), репозитории (`EventRepository`, `BookingRepository`), миграции; extension-методы `AddInfrastructureServices()` и `ApplyMigrations()`.
-- **`EventExamProject`** (Presentation) — HTTP-слой: контроллеры (`EventsController`, `BookingController`, тонкие — без бизнес-логики), глобальный обработчик исключений (`ExceptionHandlingMiddleware`, маппит доменные исключения в HTTP-статусы), composition root (`Program.cs` + `Extensions/ServiceExtensions.cs`), который просто вызывает `AddApplicationServices()` и `AddInfrastructureServices()`.
+- **`EventExamProject.Presentation`** — HTTP-слой: контроллеры (`EventsController`, `BookingController`, тонкие — без бизнес-логики и без обращений к `Domain`, так как сервисы уже отдают DTO), глобальный обработчик исключений (`ExceptionHandlingMiddleware`, маппит доменные исключения в HTTP-статусы), composition root (`Program.cs` + `Extensions/ServiceExtensions.cs`), который просто вызывает `AddApplicationServices()` и `AddInfrastructureServices()`.
 
-Тестовые проекты (`EventExamProject.Tests`, `EventExamProject.IntegrationTests`) ссылаются напрямую на `Application` и `Infrastructure`, а не на весь `EventExamProject` — Presentation им не нужен.
+Тестовые проекты (`EventExamProject.Tests`, `EventExamProject.IntegrationTests`) ссылаются напрямую на `Application` и `Infrastructure`, а не на весь `EventExamProject.Presentation` — Presentation им не нужен.
 
 ## Сборка
 
-Из папки `EventExamProject/` (там лежит `.sln`, который включает все четыре слоя и оба тестовых проекта):
+`.sln` лежит в корне репозитория (`practicum/`) и включает все четыре слоя и оба тестовых проекта:
 ```bash
 dotnet build
 ```
 
 ## База данных
 
-Строка подключения к PostgreSQL задаётся в `EventExamProject/appsettings.json`, ключ `ConnectionStrings:DefaultConnection`:
+Строка подключения к PostgreSQL задаётся в `EventExamProject.Presentation/appsettings.json`, ключ `ConnectionStrings:DefaultConnection`:
 
 ```json
 {
@@ -63,7 +63,7 @@ docker run -d --name eventapi-postgres \
 
 ## Миграции
 
-`AppDbContext` и миграции лежат в `EventExamProject.Infrastructure/Persistence/` и `EventExamProject.Infrastructure/Migrations/` соответственно — отдельно от запускаемого (startup) проекта `EventExamProject`. Поэтому все команды `dotnet-ef` нужно запускать с явным указанием обоих проектов: `--project` (где лежит `AppDbContext`) и `--startup-project` (откуда брать конфигурацию и DI).
+`AppDbContext` и миграции лежат в `EventExamProject.Infrastructure/Persistence/` и `EventExamProject.Infrastructure/Migrations/` соответственно — отдельно от запускаемого (startup) проекта `EventExamProject.Presentation`. Поэтому все команды `dotnet-ef` нужно запускать с явным указанием обоих проектов: `--project` (где лежит `AppDbContext`) и `--startup-project` (откуда брать конфигурацию и DI).
 
 Установить инструмент (один раз):
 ```bash
@@ -74,26 +74,26 @@ dotnet tool install --global dotnet-ef
 ```bash
 dotnet ef migrations add <ИмяМиграции> \
   --project EventExamProject.Infrastructure/EventExamProject.Infrastructure.csproj \
-  --startup-project EventExamProject/EventExamProject.csproj
+  --startup-project EventExamProject.Presentation/EventExamProject.Presentation.csproj
 ```
 
 Применить миграции к БД вручную, не запуская приложение (обычно не требуется — `Program.cs` делает это сам при старте):
 ```bash
 dotnet ef database update \
   --project EventExamProject.Infrastructure/EventExamProject.Infrastructure.csproj \
-  --startup-project EventExamProject/EventExamProject.csproj
+  --startup-project EventExamProject.Presentation/EventExamProject.Presentation.csproj
 ```
 
 Откатить последнюю ещё не применённую миграцию (если она не подошла):
 ```bash
 dotnet ef migrations remove \
   --project EventExamProject.Infrastructure/EventExamProject.Infrastructure.csproj \
-  --startup-project EventExamProject/EventExamProject.csproj
+  --startup-project EventExamProject.Presentation/EventExamProject.Presentation.csproj
 ```
 
 ## Запуск
 
-Из папки проекта (`EventExamProject/`), при поднятой и доступной PostgreSQL:
+Из папки проекта (`EventExamProject.Presentation/`), при поднятой и доступной PostgreSQL:
 ```bash
 dotnet run
 ```
@@ -311,6 +311,7 @@ curl -i -X POST http://localhost:5278/events/$EVENT_ID/book
 - `Title`, `StartAt`, `EndAt`, `TotalSeats` — обязательные поля
 - `EndAt` должен быть позже `StartAt`
 - `TotalSeats` должен быть больше 0
+- `page` — целое число ≥ 1, `pageSize` — от 1 до 100 (ограничено `[Range]` на `PaginationParamsDto`, чтобы `GET /events?page=0` или `?pageSize=-1` падали с `400` до вызова сервиса и репозитория, а не с `500` от Postgres на отрицательный `OFFSET`/`LIMIT`)
 
 ### Часовой пояс `StartAt`/`EndAt`
 
@@ -332,12 +333,12 @@ curl -i -X POST http://localhost:5278/events/$EVENT_ID/book
 
 | Статус | Когда возвращается                                    |
 |--------|----------------------------------------------------------|
-| `400`  | Ошибка валидации входных данных                          |
+| `400`  | Ошибка валидации входных данных (`System.ComponentModel.DataAnnotations.ValidationException`) или нарушение бизнес-инварианта домена (`DomainValidationException`, например нельзя уменьшить `TotalSeats` ниже уже забронированных мест) |
 | `404`  | Запрошенный ресурс (мероприятие или бронь) не найден      |
 | `409`  | Нет свободных мест для бронирования (`NoAvailableSeatsException`) |
 | `500`  | Непредвиденная ошибка сервера                             |
 
-Для `400`, возникающего при автоматической валидации модели (например, пустой `Title` или `EndAt` раньше `StartAt`), ASP.NET Core дополнительно включает поле `errors` со списком ошибок по каждому полю:
+Для `400`, возникающего при автоматической валидации модели (например, пустой `Title`, `EndAt` раньше `StartAt` или `page`/`pageSize` вне допустимого диапазона), ASP.NET Core дополнительно включает поле `errors` со списком ошибок по каждому полю:
 
 ```json
 {
@@ -348,3 +349,5 @@ curl -i -X POST http://localhost:5278/events/$EVENT_ID/book
   }
 }
 ```
+
+Для `500` в `detail` уходит общий текст («An unexpected error occurred. Please try again later.»), а не `ex.Message` — подробности непредвиденной ошибки (включая детали БД) попадают только в лог сервера (`_logger.LogError`), наружу клиенту не передаются.

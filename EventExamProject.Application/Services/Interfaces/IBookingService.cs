@@ -1,9 +1,9 @@
-using EventExamProject.Domain.Entities;
+using EventExamProject.Application.DTOs.Booking;
 
 namespace EventExamProject.Application.Services.Interfaces;
 
 public interface IBookingService
 {
-    Task<Booking> CreateBookingAsync(Guid eventId);
-    Task<Booking> GetBookingByIdAsync(Guid id);
+    Task<BookingInfoDto> CreateBookingAsync(Guid eventId);
+    Task<BookingInfoDto> GetBookingByIdAsync(Guid id);
 }

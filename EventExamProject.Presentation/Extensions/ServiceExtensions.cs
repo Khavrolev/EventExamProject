@@ -1,7 +1,7 @@
 using EventExamProject.Application;
 using EventExamProject.Infrastructure;
 
-namespace EventExamProject.Extensions;
+namespace EventExamProject.Presentation.Extensions;
 
 public static class ServiceExtensions
 {

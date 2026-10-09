@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using EventExamProject.Application.Abstractions;
+using EventExamProject.Application.DTOs.Booking;
 using EventExamProject.Domain.Exceptions;
 using EventExamProject.Domain.Entities;
 using EventExamProject.Application.Services.Interfaces;
@@ -13,7 +14,7 @@ internal class BookingService(IEventRepository eventRepository, IBookingReposito
     private static SemaphoreSlim GetLockFor(Guid eventId) =>
         EventLocks.GetOrAdd(eventId, static _ => new SemaphoreSlim(1, 1));
 
-    public async Task<Booking> CreateBookingAsync(Guid eventId)
+    public async Task<BookingInfoDto> CreateBookingAsync(Guid eventId)
     {
         var eventLock = GetLockFor(eventId);
         await eventLock.WaitAsync();
@@ -33,7 +34,7 @@ internal class BookingService(IEventRepository eventRepository, IBookingReposito
             var newBookingEntity = Booking.CreatePending(eventId);
             await bookingRepository.AddAsync(newBookingEntity);
 
-            return newBookingEntity;
+            return BookingInfoDto.FromBooking(newBookingEntity);
         }
         finally
         {
@@ -41,10 +42,12 @@ internal class BookingService(IEventRepository eventRepository, IBookingReposito
         }
     }
 
-    public async Task<Booking> GetBookingByIdAsync(Guid id)
+    public async Task<BookingInfoDto> GetBookingByIdAsync(Guid id)
     {
         var foundBooking = await bookingRepository.GetByIdAsync(id);
 
-        return foundBooking ?? throw new NotFoundException($"Booking with id {id} was not found");
+        return foundBooking is null
+            ? throw new NotFoundException($"Booking with id {id} was not found")
+            : BookingInfoDto.FromBooking(foundBooking);
     }
 }
