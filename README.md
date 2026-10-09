@@ -7,9 +7,33 @@
 - PostgreSQL (локально или в Docker) — приложение хранит данные в БД, а не в памяти
 - Docker — нужен для интеграционных тестов (`EventExamProject.IntegrationTests`), которые сами поднимают контейнер с PostgreSQL через Testcontainers
 
+## Архитектура
+
+Решение разбито на четыре отдельные сборки (`.csproj`) по принципам чистой архитектуры. Зависимости между ними направлены только «внутрь» и проверяются компилятором через `<ProjectReference>`:
+
+```
+EventExamProject (Presentation)
+        │
+        ├──▶ EventExamProject.Application
+        │            │
+        │            └──▶ EventExamProject.Domain
+        │
+        └──▶ EventExamProject.Infrastructure
+                     │
+                     ├──▶ EventExamProject.Application
+                     └──▶ EventExamProject.Domain
+```
+
+- **`EventExamProject.Domain`** — доменные сущности (`Event`, `Booking`), перечисление `BookingStatus`, value object `EventDetails`, доменные исключения (`NotFoundException`, `NoAvailableSeatsException`). Не зависит ни от одного фреймворка (ASP.NET Core, EF Core) и ни от одного другого проекта решения.
+- **`EventExamProject.Application`** — бизнес-логика (use cases): `EventService`, `BookingService`, фоновый `BookingProcessingService`; интерфейсы портов `IEventRepository`/`IBookingRepository` (абстракции доступа к данным — что нужно бизнес-логике от хранилища, а не как оно устроено); DTO (`EventDto`, `EventInfoDto`, `BookingInfoDto`, `PaginatedResultDto` и т.д.); extension-метод `AddApplicationServices()` для регистрации в DI. Зависит только от `Domain` — ни одной ссылки на `Infrastructure`.
+- **`EventExamProject.Infrastructure`** — реализация портов, объявленных в `Application`: `AppDbContext`, конфигурации EF Core (`EventConfiguration`, `BookingConfiguration`), репозитории (`EventRepository`, `BookingRepository`), миграции; extension-методы `AddInfrastructureServices()` и `ApplyMigrations()`.
+- **`EventExamProject`** (Presentation) — HTTP-слой: контроллеры (`EventsController`, `BookingController`, тонкие — без бизнес-логики), глобальный обработчик исключений (`ExceptionHandlingMiddleware`, маппит доменные исключения в HTTP-статусы), composition root (`Program.cs` + `Extensions/ServiceExtensions.cs`), который просто вызывает `AddApplicationServices()` и `AddInfrastructureServices()`.
+
+Тестовые проекты (`EventExamProject.Tests`, `EventExamProject.IntegrationTests`) ссылаются напрямую на `Application` и `Infrastructure`, а не на весь `EventExamProject` — Presentation им не нужен.
+
 ## Сборка
 
-Из папки проекта (`EventExamProject/`):
+Из папки `EventExamProject/` (там лежит `.sln`, который включает все четыре слоя и оба тестовых проекта):
 ```bash
 dotnet build
 ```
@@ -35,28 +59,36 @@ docker run -d --name eventapi-postgres \
   -p 5454:5432 postgres:16-alpine
 ```
 
-Схема БД (таблицы `events`, `bookings`, внешний ключ `bookings.EventId → events.Id`) управляется миграциями EF Core, а не создаётся автоматически «по слепку» модели. При каждом запуске приложение само применяет все ещё не применённые миграции: в `Program.cs` сразу после `builder.Build()` создаётся scope и вызывается `db.Database.Migrate()`. Если БД пустая — миграции создадут схему с нуля; если часть миграций уже применена — накатятся только новые. Ручных `CREATE TABLE`/`ALTER TABLE` выполнять не нужно.
+Схема БД (таблицы `events`, `bookings`, внешний ключ `bookings.EventId → events.Id`) управляется миграциями EF Core, а не создаётся автоматически «по слепку» модели. При каждом запуске приложение само применяет все ещё не применённые миграции: сразу после `builder.Build()` в `Program.cs` вызывается `app.Services.ApplyMigrations()` (extension-метод из `EventExamProject.Infrastructure`, под капотом — `AppDbContext.Database.Migrate()`). Если БД пустая — миграции создадут схему с нуля; если часть миграций уже применена — накатятся только новые. Ручных `CREATE TABLE`/`ALTER TABLE` выполнять не нужно.
 
 ## Миграции
 
-Миграции лежат в `EventExamProject/Migrations/`. Для работы с ними нужен инструмент `dotnet-ef` (устанавливается один раз):
+`AppDbContext` и миграции лежат в `EventExamProject.Infrastructure/Persistence/` и `EventExamProject.Infrastructure/Migrations/` соответственно — отдельно от запускаемого (startup) проекта `EventExamProject`. Поэтому все команды `dotnet-ef` нужно запускать с явным указанием обоих проектов: `--project` (где лежит `AppDbContext`) и `--startup-project` (откуда брать конфигурацию и DI).
+
+Установить инструмент (один раз):
 ```bash
 dotnet tool install --global dotnet-ef
 ```
 
-Создать новую миграцию после изменения моделей/конфигураций EF Core (из папки `EventExamProject/`):
+Создать новую миграцию после изменения сущностей/конфигураций EF Core (из корня репозитория, `practicum/`):
 ```bash
-dotnet ef migrations add <ИмяМиграции>
+dotnet ef migrations add <ИмяМиграции> \
+  --project EventExamProject.Infrastructure/EventExamProject.Infrastructure.csproj \
+  --startup-project EventExamProject/EventExamProject.csproj
 ```
 
 Применить миграции к БД вручную, не запуская приложение (обычно не требуется — `Program.cs` делает это сам при старте):
 ```bash
-dotnet ef database update
+dotnet ef database update \
+  --project EventExamProject.Infrastructure/EventExamProject.Infrastructure.csproj \
+  --startup-project EventExamProject/EventExamProject.csproj
 ```
 
 Откатить последнюю ещё не применённую миграцию (если она не подошла):
 ```bash
-dotnet ef migrations remove
+dotnet ef migrations remove \
+  --project EventExamProject.Infrastructure/EventExamProject.Infrastructure.csproj \
+  --startup-project EventExamProject/EventExamProject.csproj
 ```
 
 ## Запуск
@@ -91,9 +123,9 @@ http://localhost:5278/swagger/index.html
 - `BookingTests.cs` — переходы статуса брони (`Confirm`/`Reject` заполняют `ProcessedAt`).
 - `BookingServiceTests.cs` — уменьшение `AvailableSeats` при бронировании, бронирование до полного исчерпания мест, `NoAvailableSeatsException` при нехватке мест, восстановление места после отклонённой брони, а также два теста на реальную конкурентность (`Task.Run` + `Task.WhenAll`): защита от овербукинга (5 мест / 20 параллельных запросов → ровно 5 успешных) и уникальность `Id` при параллельном создании броней.
 
-Из папки проекта (`EventExamProject/`):
+Из корня репозитория (`practicum/`) — явно указываем проект, иначе `dotnet test` подхватит весь `.sln`, включая интеграционные тесты, которым нужен Docker:
 ```bash
-dotnet test
+dotnet test EventExamProject.Tests/EventExamProject.Tests.csproj
 ```
 
 ### Интеграционные тесты
@@ -109,7 +141,7 @@ dotnet test
 - `BookingRepositoryTests` покрывает CRUD и отдельно `GetPendingBookingIdsAsync` (используется фоновым сервисом) — проверяется, что в выборку попадают только брони со статусом `Pending`.
 - Изменения проверяются через **отдельный** `AppDbContext`, указывающий на тот же контейнер, а не через тот же трекнутый экземпляр — так тест подтверждает, что данные реально попали в БД, а не просто остались в change tracker'е.
 
-Запуск (Docker должен быть запущен):
+Запуск из корня репозитория (`practicum/`), Docker должен быть запущен:
 ```bash
 dotnet test EventExamProject.IntegrationTests/EventExamProject.IntegrationTests.csproj
 ```
@@ -254,7 +286,7 @@ curl -i -X POST http://localhost:5278/events/$EVENT_ID/book
 | `createdAt`   | DateTime      | Дата создания брони                                        |
 | `processedAt` | DateTime?     | Дата обработки, заполняется фоновым сервисом               |
 
-Хранится в PostgreSQL (таблица `bookings`). Сервисы (`EventService`, `BookingService`) не обращаются к `AppDbContext` напрямую — вся работа с данными инкапсулирована в репозиториях `IEventRepository`/`IBookingRepository` (`EventExamProject/DataAccess/Repositories`), зарегистрированных в DI как `Scoped`.
+Хранится в PostgreSQL (таблица `bookings`). Сервисы `EventService`/`BookingService` (`EventExamProject.Application`) не обращаются к `AppDbContext` напрямую — они зависят только от портов `IEventRepository`/`IBookingRepository` (объявлены в `EventExamProject.Application`), а конкретную реализацию на EF Core (`EventExamProject.Infrastructure/Repositories`) подставляет DI, где оба репозитория зарегистрированы как `Scoped`.
 
 ## Фоновая обработка бронирований
 
