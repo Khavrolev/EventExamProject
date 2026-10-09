@@ -1,4 +1,4 @@
-using EventExamProject.Exceptions;
+using EventExamProject.Domain.Exceptions;
 using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Mvc;
 

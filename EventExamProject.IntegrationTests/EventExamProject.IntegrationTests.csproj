@@ -23,7 +23,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\EventExamProject\EventExamProject.csproj" />
+    <ProjectReference Include="..\EventExamProject.Application\EventExamProject.Application.csproj" />
+    <ProjectReference Include="..\EventExamProject.Infrastructure\EventExamProject.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

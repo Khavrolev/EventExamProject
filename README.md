@@ -7,9 +7,33 @@
 - PostgreSQL (локально или в Docker) — приложение хранит данные в БД, а не в памяти
 - Docker — нужен для интеграционных тестов (`EventExamProject.IntegrationTests`), которые сами поднимают контейнер с PostgreSQL через Testcontainers
 
+## Архитектура
+
+Решение разбито на четыре отдельные сборки (`.csproj`) по принципам чистой архитектуры. Зависимости между ними направлены только «внутрь» и проверяются компилятором через `<ProjectReference>`:
+
+```
+EventExamProject (Presentation)
+        │
+        ├──▶ EventExamProject.Application
+        │            │
+        │            └──▶ EventExamProject.Domain
+        │
+        └──▶ EventExamProject.Infrastructure
+                     │
+                     ├──▶ EventExamProject.Application
+                     └──▶ EventExamProject.Domain
+```
+
+- **`EventExamProject.Domain`** — доменные сущности (`Event`, `Booking`), перечисление `BookingStatus`, value object `EventDetails`, доменные исключения (`NotFoundException`, `NoAvailableSeatsException`). Не зависит ни от одного фреймворка (ASP.NET Core, EF Core) и ни от одного другого проекта решения.
+- **`EventExamProject.Application`** — бизнес-логика (use cases): `EventService`, `BookingService`, фоновый `BookingProcessingService`; интерфейсы портов `IEventRepository`/`IBookingRepository` (абстракции доступа к данным — что нужно бизнес-логике от хранилища, а не как оно устроено); DTO (`EventDto`, `EventInfoDto`, `BookingInfoDto`, `PaginatedResultDto` и т.д.); extension-метод `AddApplicationServices()` для регистрации в DI. Зависит только от `Domain` — ни одной ссылки на `Infrastructure`.
+- **`EventExamProject.Infrastructure`** — реализация портов, объявленных в `Application`: `AppDbContext`, конфигурации EF Core (`EventConfiguration`, `BookingConfiguration`), репозитории (`EventRepository`, `BookingRepository`), миграции; extension-методы `AddInfrastructureServices()` и `ApplyMigrations()`.
+- **`EventExamProject`** (Presentation) — HTTP-слой: контроллеры (`EventsController`, `BookingController`, тонкие — без бизнес-логики), глобальный обработчик исключений (`ExceptionHandlingMiddleware`, маппит доменные исключения в HTTP-статусы), composition root (`Program.cs` + `Extensions/ServiceExtensions.cs`), который просто вызывает `AddApplicationServices()` и `AddInfrastructureServices()`.
+
+Тестовые проекты (`EventExamProject.Tests`, `EventExamProject.IntegrationTests`) ссылаются напрямую на `Application` и `Infrastructure`, а не на весь `EventExamProject` — Presentation им не нужен.
+
 ## Сборка
 
-Из папки проекта (`EventExamProject/`):
+Из папки `EventExamProject/` (там лежит `.sln`, который включает все четыре слоя и оба тестовых проекта):
 ```bash
 dotnet build
 ```
@@ -35,28 +59,36 @@ docker run -d --name eventapi-postgres \
   -p 5454:5432 postgres:16-alpine
 ```
 
-Схема БД (таблицы `events`, `bookings`, внешний ключ `bookings.EventId → events.Id`) управляется миграциями EF Core, а не создаётся автоматически «по слепку» модели. При каждом запуске приложение само применяет все ещё не применённые миграции: в `Program.cs` сразу после `builder.Build()` создаётся scope и вызывается `db.Database.Migrate()`. Если БД пустая — миграции создадут схему с нуля; если часть миграций уже применена — накатятся только новые. Ручных `CREATE TABLE`/`ALTER TABLE` выполнять не нужно.
+Схема БД (таблицы `events`, `bookings`, внешний ключ `bookings.EventId → events.Id`) управляется миграциями EF Core, а не создаётся автоматически «по слепку» модели. При каждом запуске приложение само применяет все ещё не применённые миграции: сразу после `builder.Build()` в `Program.cs` вызывается `app.Services.ApplyMigrations()` (extension-метод из `EventExamProject.Infrastructure`, под капотом — `AppDbContext.Database.Migrate()`). Если БД пустая — миграции создадут схему с нуля; если часть миграций уже применена — накатятся только новые. Ручных `CREATE TABLE`/`ALTER TABLE` выполнять не нужно.
 
 ## Миграции
 
-Миграции лежат в `EventExamProject/Migrations/`. Для работы с ними нужен инструмент `dotnet-ef` (устанавливается один раз):
+`AppDbContext` и миграции лежат в `EventExamProject.Infrastructure/Persistence/` и `EventExamProject.Infrastructure/Migrations/` соответственно — отдельно от запускаемого (startup) проекта `EventExamProject`. Поэтому все команды `dotnet-ef` нужно запускать с явным указанием обоих проектов: `--project` (где лежит `AppDbContext`) и `--startup-project` (откуда брать конфигурацию и DI).
+
+Установить инструмент (один раз):
 ```bash
 dotnet tool install --global dotnet-ef
 ```
 
-Создать новую миграцию после изменения моделей/конфигураций EF Core (из папки `EventExamProject/`):
+Создать новую миграцию после изменения сущностей/конфигураций EF Core (из корня репозитория, `practicum/`):
 ```bash
-dotnet ef migrations add <ИмяМиграции>
+dotnet ef migrations add <ИмяМиграции> \
+  --project EventExamProject.Infrastructure/EventExamProject.Infrastructure.csproj \
+  --startup-project EventExamProject/EventExamProject.csproj
 ```
 
 Применить миграции к БД вручную, не запуская приложение (обычно не требуется — `Program.cs` делает это сам при старте):
 ```bash
-dotnet ef database update
+dotnet ef database update \
+  --project EventExamProject.Infrastructure/EventExamProject.Infrastructure.csproj \
+  --startup-project EventExamProject/EventExamProject.csproj
 ```
 
 Откатить последнюю ещё не применённую миграцию (если она не подошла):
 ```bash
-dotnet ef migrations remove
+dotnet ef migrations remove \
+  --project EventExamProject.Infrastructure/EventExamProject.Infrastructure.csproj \
+  --startup-project EventExamProject/EventExamProject.csproj
 ```
 
 ## Запуск
@@ -91,9 +123,9 @@ http://localhost:5278/swagger/index.html
 - `BookingTests.cs` — переходы статуса брони (`Confirm`/`Reject` заполняют `ProcessedAt`).
 - `BookingServiceTests.cs` — уменьшение `AvailableSeats` при бронировании, бронирование до полного исчерпания мест, `NoAvailableSeatsException` при нехватке мест, восстановление места после отклонённой брони, а также два теста на реальную конкурентность (`Task.Run` + `Task.WhenAll`): защита от овербукинга (5 мест / 20 параллельных запросов → ровно 5 успешных) и уникальность `Id` при параллельном создании броней.
 
-Из папки проекта (`EventExamProject/`):
+Из корня репозитория (`practicum/`) — явно указываем проект, иначе `dotnet test` подхватит весь `.sln`, включая интеграционные тесты, которым нужен Docker:
 ```bash
-dotnet test
+dotnet test EventExamProject.Tests/EventExamProject.Tests.csproj
 ```
 
 ### Интеграционные тесты
@@ -109,7 +141,7 @@ dotnet test
 - `BookingRepositoryTests` покрывает CRUD и отдельно `GetPendingBookingIdsAsync` (используется фоновым сервисом) — проверяется, что в выборку попадают только брони со статусом `Pending`.
 - Изменения проверяются через **отдельный** `AppDbContext`, указывающий на тот же контейнер, а не через тот же трекнутый экземпляр — так тест подтверждает, что данные реально попали в БД, а не просто остались в change tracker'е.
 
-Запуск (Docker должен быть запущен):
+Запуск из корня репозитория (`practicum/`), Docker должен быть запущен:
 ```bash
 dotnet test EventExamProject.IntegrationTests/EventExamProject.IntegrationTests.csproj
 ```
@@ -190,7 +222,7 @@ GET /events?title=meeting&from=2026-08-01&to=2026-08-31&page=1&pageSize=10
 
 Возвращает `404 Not Found` если не найдено.
 
-**Тело запроса:** аналогично `POST` (поле `totalSeats` обязательно в теле запроса, но количество мест через этот эндпоинт не меняется — обновляются только `title`, `description`, `startAt`, `endAt`).
+**Тело запроса:** аналогично `POST` — обновляются все поля, включая `totalSeats`. При изменении `totalSeats` уже забронированные места (`totalSeats - availableSeats` на момент обновления) сохраняются, а `availableSeats` пересчитывается: `availableSeats = totalSeats - забронированные`. Если новое значение `totalSeats` меньше числа уже забронированных мест — `400 Bad Request` (нельзя уменьшить вместимость ниже того, что уже занято).
 
 ### DELETE /events/{id}
 Удалить мероприятие.
@@ -254,7 +286,7 @@ curl -i -X POST http://localhost:5278/events/$EVENT_ID/book
 | `createdAt`   | DateTime      | Дата создания брони                                        |
 | `processedAt` | DateTime?     | Дата обработки, заполняется фоновым сервисом               |
 
-Хранится в PostgreSQL (таблица `bookings`). Сервисы (`EventService`, `BookingService`) не обращаются к `AppDbContext` напрямую — вся работа с данными инкапсулирована в репозиториях `IEventRepository`/`IBookingRepository` (`EventExamProject/DataAccess/Repositories`), зарегистрированных в DI как `Scoped`.
+Хранится в PostgreSQL (таблица `bookings`). Сервисы `EventService`/`BookingService` (`EventExamProject.Application`) не обращаются к `AppDbContext` напрямую — они зависят только от портов `IEventRepository`/`IBookingRepository` (объявлены в `EventExamProject.Application`), а конкретную реализацию на EF Core (`EventExamProject.Infrastructure/Repositories`) подставляет DI, где оба репозитория зарегистрированы как `Scoped`.
 
 ## Фоновая обработка бронирований
 
@@ -271,7 +303,7 @@ curl -i -X POST http://localhost:5278/events/$EVENT_ID/book
 
 Сервис допускает конкурентные запросы на бронирование одного и того же мероприятия, поэтому критическая секция — «проверить доступные места и изменить их количество» — защищена синхронизацией, чтобы не допустить овербукинга:
 
-- **Общий `static SemaphoreSlim BookingLock` в `BookingService.CreateBookingAsync`** — `BookingService` регистрируется как `Scoped` (потому что зависит от `AppDbContext`), значит на каждый запрос создаётся новый экземпляр сервиса, и обычная блокировка на приватном поле-объекте не защитила бы от гонки между разными экземплярами. Поэтому используется один статический семафор, общий для всех экземпляров процесса: он сериализует создание броней сразу по всем мероприятиям (не только по одному конкретному `eventId`) — так проще, ценой того, что бронирования на разные мероприятия лишний раз ждут друг друга. Используется именно `SemaphoreSlim`, а не `lock`, потому что внутри критической секции есть `await` (запрос к событию и `SaveChangesAsync`), а `await` внутри `lock` компилятором не допускается. `GetBookingByIdAsync` (чтение) под блокировку не попадает.
+- **`ConcurrentDictionary<Guid, SemaphoreSlim>` в `BookingService.CreateBookingAsync`** — `BookingService` регистрируется как `Scoped`, значит на каждый запрос создаётся новый экземпляр сервиса, и обычная блокировка на приватном поле-объекте не защитила бы от гонки между разными экземплярами. Поэтому семафоры статические, но не общие на всё приложение: `GetLockFor(eventId)` берёт (или лениво создаёт через `GetOrAdd`) отдельный `SemaphoreSlim` на конкретный `eventId` — бронирования разных мероприятий не блокируют друг друга, сериализуется только конкурентный доступ к одному и тому же мероприятию. Используется именно `SemaphoreSlim`, а не `lock`, потому что внутри критической секции есть `await` (запрос к событию и `SaveChangesAsync`), а `await` внутри `lock` компилятором не допускается. `GetBookingByIdAsync` (чтение) под блокировку не попадает.
 - В `BookingProcessingService` отдельный примитив синхронизации не нужен: раньше там стоял `SemaphoreSlim`, защищавший общее in-memory хранилище, но после перехода на EF Core у каждой параллельной задачи — свой изолированный `AppDbContext`, и сериализовать доступ к нему незачем.
 
 ## Валидация
@@ -279,6 +311,10 @@ curl -i -X POST http://localhost:5278/events/$EVENT_ID/book
 - `Title`, `StartAt`, `EndAt`, `TotalSeats` — обязательные поля
 - `EndAt` должен быть позже `StartAt`
 - `TotalSeats` должен быть больше 0
+
+### Часовой пояс `StartAt`/`EndAt`
+
+Колонки `events.StartAt`/`events.EndAt` — `timestamp with time zone` (Postgres хранит их как UTC-момент времени независимо от часового пояса сессии/сервера). Npgsql на запись принимает только `DateTime` с `Kind=Utc`, поэтому на C#-стороне действует единая конвенция: **любая дата на входе трактуется как UTC**. `Event.Create`/`Event.Update` (а также фильтры `from`/`to` в `EventRepository.GetAllAsync`) нормализуют входное значение через `Event.NormalizeToUtcConvention` перед использованием (`Kind=Utc` — как есть; `Kind=Local` — конвертируется в UTC; `Kind=Unspecified`, то есть дата без явного смещения в JSON, — трактуется как уже UTC). Клиентам следует присылать даты в UTC (например, с суффиксом `Z`) либо помнить, что дата без смещения будет интерпретирована как UTC.
 
 ## Формат ответа при ошибках
 

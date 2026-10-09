@@ -1,4 +1,4 @@
-using EventExamProject.DataAccess;
+using EventExamProject.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
 namespace EventExamProject.IntegrationTests.Infrastructure;

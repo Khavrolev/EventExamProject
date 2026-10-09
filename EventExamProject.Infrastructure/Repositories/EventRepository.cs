@@ -1,0 +1,69 @@
+using EventExamProject.Application.Abstractions;
+using EventExamProject.Application.DTOs.Event;
+using EventExamProject.Application.DTOs.Pagination;
+using EventExamProject.Domain.Entities;
+using EventExamProject.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
+
+namespace EventExamProject.Infrastructure.Repositories;
+
+internal sealed class EventRepository(AppDbContext context) : IEventRepository
+{
+    public async Task<PaginatedResultDto<Event>> GetAllAsync(EventFilterDto filter, PaginationParamsDto paginationParams)
+    {
+        var filtered = context.Events.AsQueryable();
+
+        if (!string.IsNullOrEmpty(filter.Title))
+        {
+            var title = filter.Title.ToLower();
+            filtered = filtered.Where(e => e.Title.ToLower().Contains(title));
+        }
+
+        if (filter.From.HasValue)
+        {
+            var from = Event.NormalizeToUtcConvention(filter.From.Value);
+            filtered = filtered.Where(e => e.StartAt >= from);
+        }
+
+        if (filter.To.HasValue)
+        {
+            var to = Event.NormalizeToUtcConvention(filter.To.Value);
+            filtered = filtered.Where(e => e.EndAt <= to);
+        }
+
+        var totalCount = await filtered.CountAsync();
+
+        var paginated = await filtered
+            .OrderBy(e => e.StartAt)
+            .ThenBy(e => e.Id)
+            .Skip((paginationParams.Page - 1) * paginationParams.PageSize)
+            .Take(paginationParams.PageSize)
+            .ToListAsync();
+
+        return new PaginatedResultDto<Event>
+        {
+            Data = paginated, TotalCount = totalCount, Page = paginationParams.Page, PageSize = paginationParams.PageSize
+        };
+    }
+
+    public async Task<Event?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
+        await context.Events.FindAsync([id], cancellationToken);
+
+    public async Task AddAsync(Event newEvent)
+    {
+        context.Events.Add(newEvent);
+        await context.SaveChangesAsync();
+    }
+
+    public async Task UpdateAsync(Event existingEvent)
+    {
+        context.Events.Update(existingEvent);
+        await context.SaveChangesAsync();
+    }
+
+    public async Task DeleteAsync(Event eventToDelete)
+    {
+        context.Events.Remove(eventToDelete);
+        await context.SaveChangesAsync();
+    }
+}

@@ -1,7 +1,7 @@
-using EventExamProject.DTOs.Booking;
-using EventExamProject.DTOs.Event;
-using EventExamProject.DTOs.Pagination;
-using EventExamProject.Services.Interfaces;
+using EventExamProject.Application.DTOs.Booking;
+using EventExamProject.Application.DTOs.Event;
+using EventExamProject.Application.DTOs.Pagination;
+using EventExamProject.Application.Services.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 
 namespace EventExamProject.Controllers;
