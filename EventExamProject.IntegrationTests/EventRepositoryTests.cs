@@ -1,4 +1,4 @@
-using EventExamProject.DataAccess.Repositories;
+using EventExamProject.Infrastructure.Repositories;
 using EventExamProject.Application.DTOs.Event;
 using EventExamProject.Application.DTOs.Pagination;
 using EventExamProject.IntegrationTests.Infrastructure;

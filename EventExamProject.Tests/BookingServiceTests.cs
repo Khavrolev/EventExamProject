@@ -1,6 +1,6 @@
-using EventExamProject.DataAccess;
+using EventExamProject.Infrastructure.Persistence;
 using EventExamProject.Application.Abstractions;
-using EventExamProject.DataAccess.Repositories;
+using EventExamProject.Infrastructure.Repositories;
 using EventExamProject.Application.DTOs.Event;
 using EventExamProject.Domain.Exceptions;
 using EventExamProject.Domain.Entities;

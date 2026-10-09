@@ -3,10 +3,10 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace EventExamProject.Migrations
+namespace EventExamProject.Infrastructure.Migrations
 {
     /// <inheritdoc />
-    public partial class RevertEventTimestampColumnsToWithTimeZone : Migration
+    public partial class ChangeEventTimestampColumnsToWithoutTimeZone : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -14,18 +14,18 @@ namespace EventExamProject.Migrations
             migrationBuilder.AlterColumn<DateTime>(
                 name: "StartAt",
                 table: "events",
-                type: "timestamp with time zone",
+                type: "timestamp without time zone",
                 nullable: false,
                 oldClrType: typeof(DateTime),
-                oldType: "timestamp without time zone");
+                oldType: "timestamp with time zone");
 
             migrationBuilder.AlterColumn<DateTime>(
                 name: "EndAt",
                 table: "events",
-                type: "timestamp with time zone",
+                type: "timestamp without time zone",
                 nullable: false,
                 oldClrType: typeof(DateTime),
-                oldType: "timestamp without time zone");
+                oldType: "timestamp with time zone");
         }
 
         /// <inheritdoc />
@@ -34,18 +34,18 @@ namespace EventExamProject.Migrations
             migrationBuilder.AlterColumn<DateTime>(
                 name: "StartAt",
                 table: "events",
-                type: "timestamp without time zone",
+                type: "timestamp with time zone",
                 nullable: false,
                 oldClrType: typeof(DateTime),
-                oldType: "timestamp with time zone");
+                oldType: "timestamp without time zone");
 
             migrationBuilder.AlterColumn<DateTime>(
                 name: "EndAt",
                 table: "events",
-                type: "timestamp without time zone",
+                type: "timestamp with time zone",
                 nullable: false,
                 oldClrType: typeof(DateTime),
-                oldType: "timestamp with time zone");
+                oldType: "timestamp without time zone");
         }
     }
 }

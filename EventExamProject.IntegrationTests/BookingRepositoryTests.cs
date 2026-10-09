@@ -1,4 +1,4 @@
-using EventExamProject.DataAccess.Repositories;
+using EventExamProject.Infrastructure.Repositories;
 using EventExamProject.IntegrationTests.Infrastructure;
 using EventExamProject.Domain.Entities;
 using EventExamProject.Domain.ValueObjects;

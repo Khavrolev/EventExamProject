@@ -1,5 +1,5 @@
-using EventExamProject.DataAccess;
 using EventExamProject.Extensions;
+using EventExamProject.Infrastructure.Persistence;
 using EventExamProject.Middleware;
 using Microsoft.EntityFrameworkCore;
 

@@ -2,9 +2,10 @@ using EventExamProject.Application.Abstractions;
 using EventExamProject.Application.DTOs.Event;
 using EventExamProject.Application.DTOs.Pagination;
 using EventExamProject.Domain.Entities;
+using EventExamProject.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
-namespace EventExamProject.DataAccess.Repositories;
+namespace EventExamProject.Infrastructure.Repositories;
 
 internal sealed class EventRepository(AppDbContext context) : IEventRepository
 {

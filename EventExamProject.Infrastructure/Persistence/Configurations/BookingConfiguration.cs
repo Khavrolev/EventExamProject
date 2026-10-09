@@ -2,7 +2,7 @@ using EventExamProject.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
-namespace EventExamProject.DataAccess.Configurations;
+namespace EventExamProject.Infrastructure.Persistence.Configurations;
 
 internal sealed class BookingConfiguration : IEntityTypeConfiguration<Booking>
 {

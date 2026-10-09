@@ -8,18 +8,13 @@
 
     <ItemGroup>
         <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.8" />
-        <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.11" />
+        <!-- Required by `dotnet ef` tooling: the EF CLI needs Design referenced by the startup project,
+             even though AppDbContext and migrations live in EventExamProject.Infrastructure. -->
         <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.11">
           <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
           <PrivateAssets>all</PrivateAssets>
         </PackageReference>
-        <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
         <PackageReference Include="Swashbuckle.AspNetCore" Version="10.2.2" />
-    </ItemGroup>
-
-    <ItemGroup>
-        <InternalsVisibleTo Include="EventExamProject.Tests" />
-        <InternalsVisibleTo Include="EventExamProject.IntegrationTests" />
     </ItemGroup>
 
     <ItemGroup>
