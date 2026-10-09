@@ -1,4 +1,4 @@
-using EventExamProject.Models;
+using EventExamProject.Domain.Entities;
 using FluentAssertions;
 
 namespace EventExamProject.Tests;

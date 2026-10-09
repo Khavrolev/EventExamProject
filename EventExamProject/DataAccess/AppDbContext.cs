@@ -1,4 +1,4 @@
-using EventExamProject.Models;
+using EventExamProject.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace EventExamProject.DataAccess;

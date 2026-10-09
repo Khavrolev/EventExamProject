@@ -1,7 +1,7 @@
 using EventExamProject.DataAccess.Repositories;
-using EventExamProject.DTOs.Event;
 using EventExamProject.IntegrationTests.Infrastructure;
-using EventExamProject.Models;
+using EventExamProject.Domain.Entities;
+using EventExamProject.Domain.ValueObjects;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 
@@ -11,14 +11,12 @@ namespace EventExamProject.IntegrationTests;
 public class BookingRepositoryTests(DatabaseFixture fixture) : RepositoryTestBase(fixture)
 {
     private static Event CreateEvent(int totalSeats = 10) =>
-        Event.Create(new EventDto
-        {
-            Title = "Event",
-            Description = "Description",
-            StartAt = new DateTime(2026, 8, 1),
-            EndAt = new DateTime(2026, 8, 1).AddHours(1),
-            TotalSeats = totalSeats
-        });
+        Event.Create(new EventDetails(
+            "Event",
+            "Description",
+            new DateTime(2026, 8, 1),
+            new DateTime(2026, 8, 1).AddHours(1),
+            totalSeats));
 
     private async Task<Event> SeedEventAsync(int totalSeats = 10)
     {

@@ -1,4 +1,4 @@
-namespace EventExamProject.Models;
+namespace EventExamProject.Domain.Entities;
 
 public class Booking
 {

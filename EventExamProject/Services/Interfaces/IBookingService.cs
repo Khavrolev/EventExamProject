@@ -1,4 +1,4 @@
-using EventExamProject.Models;
+using EventExamProject.Domain.Entities;
 
 namespace EventExamProject.Services.Interfaces;
 

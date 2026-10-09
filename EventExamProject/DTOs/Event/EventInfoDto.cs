@@ -1,4 +1,4 @@
-using EventExamProject.Models;
+using EventExamProject.Domain.Entities;
 
 namespace EventExamProject.DTOs.Event;
 
@@ -12,7 +12,7 @@ public class EventInfoDto
     public int TotalSeats { get; set; }
     public int AvailableSeats { get; set; }
 
-    public static EventInfoDto FromEvent(EventExamProject.Models.Event @event) => new()
+    public static EventInfoDto FromEvent(EventExamProject.Domain.Entities.Event @event) => new()
     {
         Id = @event.Id,
         Title = @event.Title,

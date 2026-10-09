@@ -1,7 +1,7 @@
-using EventExamProject.DTOs.Event;
 using System.ComponentModel.DataAnnotations;
+using EventExamProject.Domain.ValueObjects;
 
-namespace EventExamProject.Models;
+namespace EventExamProject.Domain.Entities;
 
 public class Event
 {
@@ -19,9 +19,9 @@ public class Event
         Title = null!;
     }
 
-    public static Event Create(EventDto dto)
+    public static Event Create(EventDetails details)
     {
-        if (dto.TotalSeats is null or <= 0)
+        if (details.TotalSeats <= 0)
         {
             throw new ValidationException("TotalSeats must be greater than zero");
         }
@@ -29,38 +29,38 @@ public class Event
         return new Event
         {
             Id = Guid.NewGuid(),
-            Title = dto.Title,
-            Description = dto.Description,
-            StartAt = NormalizeToUtcConvention(dto.StartAt),
-            EndAt = NormalizeToUtcConvention(dto.EndAt),
-            TotalSeats = dto.TotalSeats.Value,
-            AvailableSeats = dto.TotalSeats.Value
+            Title = details.Title,
+            Description = details.Description,
+            StartAt = NormalizeToUtcConvention(details.StartAt),
+            EndAt = NormalizeToUtcConvention(details.EndAt),
+            TotalSeats = details.TotalSeats,
+            AvailableSeats = details.TotalSeats
         };
     }
 
-    public void Update(EventDto dto)
+    public void Update(EventDetails details)
     {
-        if (dto.TotalSeats is null or <= 0)
+        if (details.TotalSeats <= 0)
         {
             throw new ValidationException("TotalSeats must be greater than zero");
         }
 
-        Title = dto.Title;
-        Description = dto.Description;
-        StartAt = NormalizeToUtcConvention(dto.StartAt);
-        EndAt = NormalizeToUtcConvention(dto.EndAt);
+        Title = details.Title;
+        Description = details.Description;
+        StartAt = NormalizeToUtcConvention(details.StartAt);
+        EndAt = NormalizeToUtcConvention(details.EndAt);
 
-        if (dto.TotalSeats.Value != TotalSeats)
+        if (details.TotalSeats != TotalSeats)
         {
             var bookedSeats = TotalSeats - AvailableSeats;
 
-            if (dto.TotalSeats.Value < bookedSeats)
+            if (details.TotalSeats < bookedSeats)
             {
                 throw new ValidationException("TotalSeats cannot be less than the number of seats already booked");
             }
 
-            AvailableSeats = dto.TotalSeats.Value - bookedSeats;
-            TotalSeats = dto.TotalSeats.Value;
+            AvailableSeats = details.TotalSeats - bookedSeats;
+            TotalSeats = details.TotalSeats;
         }
     }
 
@@ -69,7 +69,7 @@ public class Event
     /// with Kind=Utc. Whatever Kind the client sent (Utc/Local/Unspecified), the value is
     /// normalized to UTC so filtering and sorting stay consistent regardless of input.
     /// </summary>
-    internal static DateTime NormalizeToUtcConvention(DateTime value) => value.Kind switch
+    public static DateTime NormalizeToUtcConvention(DateTime value) => value.Kind switch
     {
         DateTimeKind.Utc => value,
         DateTimeKind.Local => value.ToUniversalTime(),

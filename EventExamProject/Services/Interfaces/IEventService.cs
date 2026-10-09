@@ -1,7 +1,7 @@
 using EventExamProject.DTOs;
 using EventExamProject.DTOs.Event;
 using EventExamProject.DTOs.Pagination;
-using EventExamProject.Models;
+using EventExamProject.Domain.Entities;
 
 namespace EventExamProject.Services.Interfaces;
 

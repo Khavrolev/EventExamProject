@@ -4,7 +4,7 @@ using EventExamProject.DataAccess.Interfaces;
 using EventExamProject.DataAccess.Repositories;
 using EventExamProject.DTOs.Event;
 using EventExamProject.DTOs.Pagination;
-using EventExamProject.Exceptions;
+using EventExamProject.Domain.Exceptions;
 using EventExamProject.Services;
 using EventExamProject.Services.Interfaces;
 using FluentAssertions;

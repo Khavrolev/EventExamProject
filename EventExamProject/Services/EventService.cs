@@ -2,8 +2,9 @@ using System.ComponentModel.DataAnnotations;
 using EventExamProject.DataAccess.Interfaces;
 using EventExamProject.DTOs.Event;
 using EventExamProject.DTOs.Pagination;
-using EventExamProject.Exceptions;
-using EventExamProject.Models;
+using EventExamProject.Domain.Exceptions;
+using EventExamProject.Domain.Entities;
+using EventExamProject.Domain.ValueObjects;
 using EventExamProject.Resources;
 using EventExamProject.Services.Interfaces;
 
@@ -35,7 +36,12 @@ internal class EventService(IEventRepository eventRepository) : IEventService
     {
         ValidateDates(newEvent);
 
-        var newEventEntity = Event.Create(newEvent);
+        var newEventEntity = Event.Create(new EventDetails(
+            newEvent.Title,
+            newEvent.Description,
+            newEvent.StartAt,
+            newEvent.EndAt,
+            newEvent.TotalSeats!.Value));
         await eventRepository.AddAsync(newEventEntity);
 
         return newEventEntity;
@@ -52,7 +58,12 @@ internal class EventService(IEventRepository eventRepository) : IEventService
 
         ValidateDates(updatedEvent);
 
-        existingEvent.Update(updatedEvent);
+        existingEvent.Update(new EventDetails(
+            updatedEvent.Title,
+            updatedEvent.Description,
+            updatedEvent.StartAt,
+            updatedEvent.EndAt,
+            updatedEvent.TotalSeats!.Value));
 
         await eventRepository.UpdateAsync(existingEvent);
 

@@ -1,23 +1,17 @@
 using System.ComponentModel.DataAnnotations;
-using EventExamProject.DTOs.Event;
-using EventExamProject.Models;
+using EventExamProject.Domain.Entities;
+using EventExamProject.Domain.ValueObjects;
 using FluentAssertions;
 
 namespace EventExamProject.Tests;
 
 public class EventTests
 {
-    private static Event CreateEvent(int totalSeats) =>
-        Event.Create(CreateDto(totalSeats));
+    private static readonly DateTime StartAt = new(2026, 8, 1);
+    private static readonly DateTime EndAt = StartAt.AddHours(1);
 
-    private static EventDto CreateDto(int totalSeats, string title = "Event") =>
-        new()
-        {
-            Title = title,
-            StartAt = new DateTime(2026, 8, 1),
-            EndAt = new DateTime(2026, 8, 1).AddHours(1),
-            TotalSeats = totalSeats,
-        };
+    private static Event CreateEvent(int totalSeats, string title = "Event") =>
+        Event.Create(new EventDetails(title, null, StartAt, EndAt, totalSeats));
 
     [Fact]
     public void TryReserveSeats_ShouldReturnTrue_AndDecreaseAvailableSeats_WhenSeatsAreAvailable()
@@ -90,7 +84,7 @@ public class EventTests
     {
         var @event = CreateEvent(totalSeats: 5);
 
-        @event.Update(CreateDto(totalSeats: 8));
+        @event.Update(new EventDetails("Event", null, StartAt, EndAt, TotalSeats: 8));
 
         @event.TotalSeats.Should().Be(8);
         @event.AvailableSeats.Should().Be(8);
@@ -102,7 +96,7 @@ public class EventTests
         var @event = CreateEvent(totalSeats: 5);
         @event.TryReserveSeats(3);
 
-        @event.Update(CreateDto(totalSeats: 10));
+        @event.Update(new EventDetails("Event", null, StartAt, EndAt, TotalSeats: 10));
 
         @event.TotalSeats.Should().Be(10);
         @event.AvailableSeats.Should().Be(7);
@@ -114,7 +108,7 @@ public class EventTests
         var @event = CreateEvent(totalSeats: 5);
         @event.TryReserveSeats(2);
 
-        @event.Update(CreateDto(totalSeats: 5, title: "New title"));
+        @event.Update(new EventDetails("New title", null, StartAt, EndAt, TotalSeats: 5));
 
         @event.TotalSeats.Should().Be(5);
         @event.AvailableSeats.Should().Be(3);
@@ -126,7 +120,7 @@ public class EventTests
         var @event = CreateEvent(totalSeats: 5);
         @event.TryReserveSeats(3);
 
-        var act = () => @event.Update(CreateDto(totalSeats: 2));
+        var act = () => @event.Update(new EventDetails("Event", null, StartAt, EndAt, TotalSeats: 2));
 
         act.Should().Throw<ValidationException>();
         @event.TotalSeats.Should().Be(5);
@@ -138,13 +132,7 @@ public class EventTests
     {
         var utcStart = new DateTime(2026, 8, 1, 10, 0, 0, DateTimeKind.Utc);
 
-        var @event = Event.Create(new EventDto
-        {
-            Title = "Event",
-            StartAt = utcStart,
-            EndAt = utcStart.AddHours(1),
-            TotalSeats = 5
-        });
+        var @event = Event.Create(new EventDetails("Event", null, utcStart, utcStart.AddHours(1), TotalSeats: 5));
 
         @event.StartAt.Kind.Should().Be(DateTimeKind.Utc);
         @event.StartAt.Should().Be(utcStart);
@@ -156,13 +144,7 @@ public class EventTests
         var localStart = new DateTime(2026, 8, 1, 10, 0, 0, DateTimeKind.Local);
         var expected = localStart.ToUniversalTime();
 
-        var @event = Event.Create(new EventDto
-        {
-            Title = "Event",
-            StartAt = localStart,
-            EndAt = localStart.AddHours(1),
-            TotalSeats = 5
-        });
+        var @event = Event.Create(new EventDetails("Event", null, localStart, localStart.AddHours(1), TotalSeats: 5));
 
         @event.StartAt.Kind.Should().Be(DateTimeKind.Utc);
         @event.StartAt.Should().Be(expected);
@@ -173,13 +155,7 @@ public class EventTests
     {
         var unspecifiedStart = new DateTime(2026, 8, 1, 10, 0, 0, DateTimeKind.Unspecified);
 
-        var @event = Event.Create(new EventDto
-        {
-            Title = "Event",
-            StartAt = unspecifiedStart,
-            EndAt = unspecifiedStart.AddHours(1),
-            TotalSeats = 5
-        });
+        var @event = Event.Create(new EventDetails("Event", null, unspecifiedStart, unspecifiedStart.AddHours(1), TotalSeats: 5));
 
         @event.StartAt.Kind.Should().Be(DateTimeKind.Utc);
         @event.StartAt.Should().Be(DateTime.SpecifyKind(unspecifiedStart, DateTimeKind.Utc));

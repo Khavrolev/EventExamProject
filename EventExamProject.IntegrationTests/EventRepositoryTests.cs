@@ -2,7 +2,8 @@ using EventExamProject.DataAccess.Repositories;
 using EventExamProject.DTOs.Event;
 using EventExamProject.DTOs.Pagination;
 using EventExamProject.IntegrationTests.Infrastructure;
-using EventExamProject.Models;
+using EventExamProject.Domain.Entities;
+using EventExamProject.Domain.ValueObjects;
 using FluentAssertions;
 
 namespace EventExamProject.IntegrationTests;
@@ -15,14 +16,7 @@ public class EventRepositoryTests(DatabaseFixture fixture) : RepositoryTestBase(
         var start = startAt ?? new DateTime(2026, 8, 1);
         var end = endAt ?? start.AddHours(1);
 
-        return Event.Create(new EventDto
-        {
-            Title = title,
-            Description = "Description",
-            StartAt = start,
-            EndAt = end,
-            TotalSeats = totalSeats
-        });
+        return Event.Create(new EventDetails(title, "Description", start, end, totalSeats));
     }
 
     [Fact]
@@ -83,14 +77,12 @@ public class EventRepositoryTests(DatabaseFixture fixture) : RepositoryTestBase(
         await repository.AddAsync(existingEvent);
 
         // Act
-        existingEvent.Update(new EventDto
-        {
-            Title = "New title",
-            Description = "Updated description",
-            StartAt = existingEvent.StartAt,
-            EndAt = existingEvent.EndAt,
-            TotalSeats = existingEvent.TotalSeats
-        });
+        existingEvent.Update(new EventDetails(
+            "New title",
+            "Updated description",
+            existingEvent.StartAt,
+            existingEvent.EndAt,
+            existingEvent.TotalSeats));
         await repository.UpdateAsync(existingEvent);
 
         // Assert

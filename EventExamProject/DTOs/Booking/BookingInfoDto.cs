@@ -1,4 +1,4 @@
-using EventExamProject.Models;
+using EventExamProject.Domain.Entities;
 
 namespace EventExamProject.DTOs.Booking;
 
@@ -10,7 +10,7 @@ public class BookingInfoDto
     public DateTime CreatedAt { get; set; }
     public DateTime? ProcessedAt { get; set; }
 
-    public static BookingInfoDto FromBooking(EventExamProject.Models.Booking booking) => new()
+    public static BookingInfoDto FromBooking(EventExamProject.Domain.Entities.Booking booking) => new()
     {
         Id = booking.Id,
         EventId = booking.EventId,

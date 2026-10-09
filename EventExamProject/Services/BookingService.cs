@@ -1,7 +1,7 @@
 using System.Collections.Concurrent;
 using EventExamProject.DataAccess.Interfaces;
-using EventExamProject.Exceptions;
-using EventExamProject.Models;
+using EventExamProject.Domain.Exceptions;
+using EventExamProject.Domain.Entities;
 using EventExamProject.Services.Interfaces;
 
 namespace EventExamProject.Services;
