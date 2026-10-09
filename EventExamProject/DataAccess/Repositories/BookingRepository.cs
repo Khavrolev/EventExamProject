@@ -1,4 +1,4 @@
-using EventExamProject.DataAccess.Interfaces;
+using EventExamProject.Application.Abstractions;
 using EventExamProject.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 

@@ -1,15 +1,14 @@
+using EventExamProject.Application;
 using EventExamProject.DataAccess;
-using EventExamProject.DataAccess.Interfaces;
+using EventExamProject.Application.Abstractions;
 using EventExamProject.DataAccess.Repositories;
-using EventExamProject.Services;
-using EventExamProject.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
 
 namespace EventExamProject.Extensions;
 
 public static class ServiceExtensions
 {
-    public static IServiceCollection AddApplicationServices(this IServiceCollection services, IConfiguration configuration)
+    public static IServiceCollection AddApiServices(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddControllers();
 
@@ -19,10 +18,7 @@ public static class ServiceExtensions
         services.AddScoped<IEventRepository, EventRepository>();
         services.AddScoped<IBookingRepository, BookingRepository>();
 
-        services.AddScoped<IEventService, EventService>();
-        services.AddScoped<IBookingService, BookingService>();
-
-        services.AddHostedService<BookingProcessingService>();
+        services.AddApplicationServices();
 
         return services;
     }

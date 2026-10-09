@@ -1,6 +1,6 @@
 using EventExamProject.Domain.Entities;
 
-namespace EventExamProject.DTOs.Booking;
+namespace EventExamProject.Application.DTOs.Booking;
 
 public class BookingInfoDto
 {

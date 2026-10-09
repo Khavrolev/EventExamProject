@@ -1,6 +1,6 @@
 using EventExamProject.DataAccess.Repositories;
-using EventExamProject.DTOs.Event;
-using EventExamProject.DTOs.Pagination;
+using EventExamProject.Application.DTOs.Event;
+using EventExamProject.Application.DTOs.Pagination;
 using EventExamProject.IntegrationTests.Infrastructure;
 using EventExamProject.Domain.Entities;
 using EventExamProject.Domain.ValueObjects;

@@ -1,11 +1,11 @@
 using EventExamProject.DataAccess;
-using EventExamProject.DataAccess.Interfaces;
+using EventExamProject.Application.Abstractions;
 using EventExamProject.DataAccess.Repositories;
-using EventExamProject.DTOs.Event;
+using EventExamProject.Application.DTOs.Event;
 using EventExamProject.Domain.Exceptions;
 using EventExamProject.Domain.Entities;
-using EventExamProject.Services;
-using EventExamProject.Services.Interfaces;
+using EventExamProject.Application.Services;
+using EventExamProject.Application.Services.Interfaces;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;

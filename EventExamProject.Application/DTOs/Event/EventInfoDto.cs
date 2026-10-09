@@ -1,6 +1,6 @@
 using EventExamProject.Domain.Entities;
 
-namespace EventExamProject.DTOs.Event;
+namespace EventExamProject.Application.DTOs.Event;
 
 public class EventInfoDto
 {

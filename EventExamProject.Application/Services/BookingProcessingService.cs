@@ -1,6 +1,9 @@
-using EventExamProject.DataAccess.Interfaces;
+using EventExamProject.Application.Abstractions;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
-namespace EventExamProject.Services;
+namespace EventExamProject.Application.Services;
 
 internal class BookingProcessingService(IServiceScopeFactory scopeFactory, ILogger<BookingProcessingService> logger) : BackgroundService
 {

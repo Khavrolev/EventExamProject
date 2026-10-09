@@ -1,6 +1,6 @@
-using EventExamProject.DataAccess.Interfaces;
-using EventExamProject.DTOs.Event;
-using EventExamProject.DTOs.Pagination;
+using EventExamProject.Application.Abstractions;
+using EventExamProject.Application.DTOs.Event;
+using EventExamProject.Application.DTOs.Pagination;
 using EventExamProject.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 

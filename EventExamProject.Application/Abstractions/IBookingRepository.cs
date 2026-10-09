@@ -1,6 +1,6 @@
 using EventExamProject.Domain.Entities;
 
-namespace EventExamProject.DataAccess.Interfaces;
+namespace EventExamProject.Application.Abstractions;
 
 public interface IBookingRepository
 {

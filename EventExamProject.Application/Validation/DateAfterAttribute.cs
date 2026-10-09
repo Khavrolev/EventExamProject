@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace EventExamProject.Validation;
+namespace EventExamProject.Application.Validation;
 
 [AttributeUsage(AttributeTargets.Property)]
 public class DateAfterAttribute(string otherPropertyName, bool orEqual = false) : ValidationAttribute

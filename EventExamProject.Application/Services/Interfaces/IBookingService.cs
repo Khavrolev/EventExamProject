@@ -1,6 +1,6 @@
 using EventExamProject.Domain.Entities;
 
-namespace EventExamProject.Services.Interfaces;
+namespace EventExamProject.Application.Services.Interfaces;
 
 public interface IBookingService
 {

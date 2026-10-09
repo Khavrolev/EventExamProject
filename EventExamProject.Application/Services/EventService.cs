@@ -1,14 +1,14 @@
 using System.ComponentModel.DataAnnotations;
-using EventExamProject.DataAccess.Interfaces;
-using EventExamProject.DTOs.Event;
-using EventExamProject.DTOs.Pagination;
+using EventExamProject.Application.Abstractions;
+using EventExamProject.Application.DTOs.Event;
+using EventExamProject.Application.DTOs.Pagination;
 using EventExamProject.Domain.Exceptions;
 using EventExamProject.Domain.Entities;
 using EventExamProject.Domain.ValueObjects;
-using EventExamProject.Resources;
-using EventExamProject.Services.Interfaces;
+using EventExamProject.Application.Resources;
+using EventExamProject.Application.Services.Interfaces;
 
-namespace EventExamProject.Services;
+namespace EventExamProject.Application.Services;
 
 internal class EventService(IEventRepository eventRepository) : IEventService
 {

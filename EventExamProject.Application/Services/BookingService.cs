@@ -1,10 +1,10 @@
 using System.Collections.Concurrent;
-using EventExamProject.DataAccess.Interfaces;
+using EventExamProject.Application.Abstractions;
 using EventExamProject.Domain.Exceptions;
 using EventExamProject.Domain.Entities;
-using EventExamProject.Services.Interfaces;
+using EventExamProject.Application.Services.Interfaces;
 
-namespace EventExamProject.Services;
+namespace EventExamProject.Application.Services;
 
 internal class BookingService(IEventRepository eventRepository, IBookingRepository bookingRepository) : IBookingService
 {

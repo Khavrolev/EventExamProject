@@ -7,7 +7,7 @@
 // </auto-generated>
 //------------------------------------------------------------------------------
 
-namespace EventExamProject.Resources {
+namespace EventExamProject.Application.Resources {
     using System;
     
     
@@ -28,7 +28,7 @@ namespace EventExamProject.Resources {
         internal static System.Resources.ResourceManager ResourceManager {
             get {
                 if (object.Equals(null, resourceMan)) {
-                    System.Resources.ResourceManager temp = new System.Resources.ResourceManager("EventExamProject.Resources.ValidationMessages", typeof(ValidationMessages).Assembly);
+                    System.Resources.ResourceManager temp = new System.Resources.ResourceManager("EventExamProject.Application.Resources.ValidationMessages", typeof(ValidationMessages).Assembly);
                     resourceMan = temp;
                 }
                 return resourceMan;

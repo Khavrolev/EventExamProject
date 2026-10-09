@@ -1,4 +1,4 @@
-namespace EventExamProject.DTOs.Pagination;
+namespace EventExamProject.Application.DTOs.Pagination;
 
 public class PaginationParamsDto
 {

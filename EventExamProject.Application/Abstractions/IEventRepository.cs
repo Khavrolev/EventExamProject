@@ -1,8 +1,8 @@
-using EventExamProject.DTOs.Event;
-using EventExamProject.DTOs.Pagination;
+using EventExamProject.Application.DTOs.Event;
+using EventExamProject.Application.DTOs.Pagination;
 using EventExamProject.Domain.Entities;
 
-namespace EventExamProject.DataAccess.Interfaces;
+namespace EventExamProject.Application.Abstractions;
 
 public interface IEventRepository
 {

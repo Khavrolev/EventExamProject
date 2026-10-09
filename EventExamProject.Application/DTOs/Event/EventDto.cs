@@ -1,8 +1,8 @@
-using EventExamProject.Resources;
-using EventExamProject.Validation;
+using EventExamProject.Application.Resources;
+using EventExamProject.Application.Validation;
 using System.ComponentModel.DataAnnotations;
 
-namespace EventExamProject.DTOs.Event;
+namespace EventExamProject.Application.DTOs.Event;
 
 public class EventDto
 {
