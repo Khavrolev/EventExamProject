@@ -2,6 +2,8 @@ using EventExamProject.Application.DTOs.Booking;
 using EventExamProject.Application.DTOs.Event;
 using EventExamProject.Application.DTOs.Pagination;
 using EventExamProject.Application.Services.Interfaces;
+using EventExamProject.Presentation.Extensions;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace EventExamProject.Presentation.Controllers;
@@ -33,6 +35,9 @@ public class EventsController(IEventService eventService, IBookingService bookin
     }
 
     [HttpPost]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(EventInfoDto), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<EventInfoDto>> CreateEvent(EventDto newEvent)
@@ -46,6 +51,9 @@ public class EventsController(IEventService eventService, IBookingService bookin
     }
 
     [HttpPut("{id:Guid}")]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(EventInfoDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
@@ -57,6 +65,9 @@ public class EventsController(IEventService eventService, IBookingService bookin
     }
 
     [HttpDelete("{id:Guid}")]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<ActionResult> DeleteEvent(Guid id)
@@ -67,12 +78,15 @@ public class EventsController(IEventService eventService, IBookingService bookin
     }
 
     [HttpPost("{id:Guid}/book")]
+    [Authorize]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(BookingInfoDto), StatusCodes.Status202Accepted)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<ActionResult<BookingInfoDto>> CreateBooking(Guid id)
     {
-        var bookingInfo = await bookingService.CreateBookingAsync(id);
+        var bookingInfo = await bookingService.CreateBookingAsync(id, User.GetUserId());
 
         return AcceptedAtAction(nameof(BookingController.GetBookingById), "Booking", new
         {

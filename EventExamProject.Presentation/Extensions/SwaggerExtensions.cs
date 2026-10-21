@@ -14,6 +14,19 @@ public static class SwaggerExtensions
                 Version = "v1",
                 Description = "Сервис для управления мероприятиями и бронированием мест"
             });
+
+            options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+            {
+                Type = SecuritySchemeType.Http,
+                Scheme = "bearer",
+                BearerFormat = "JWT",
+                Description = "Вставьте JWT-токен, полученный через POST /auth/login"
+            });
+
+            options.AddSecurityRequirement(document => new OpenApiSecurityRequirement
+            {
+                [new OpenApiSecuritySchemeReference("Bearer", document)] = []
+            });
         });
 
         return services;

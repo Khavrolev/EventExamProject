@@ -8,6 +8,7 @@ public static class ServiceExtensions
     public static IServiceCollection AddApiServices(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddControllers();
+        services.AddJwtAuthentication(configuration);
 
         services.AddApplicationServices();
         services.AddInfrastructureServices(configuration);

@@ -67,18 +67,21 @@ public class ExceptionHandlingMiddleware
     private static int MapStatusCode(Exception ex)
         => ex switch
         {
-            ValidationException or DomainValidationException => StatusCodes.Status400BadRequest,
+            ValidationException or DomainValidationException or EventAlreadyStartedException => StatusCodes.Status400BadRequest,
+            ForbiddenException => StatusCodes.Status403Forbidden,
             NotFoundException => StatusCodes.Status404NotFound,
-            NoAvailableSeatsException => StatusCodes.Status409Conflict,
+            NoAvailableSeatsException or BookingLimitExceededException => StatusCodes.Status409Conflict,
             _ => StatusCodes.Status500InternalServerError,
         };
 
     private static string MapTitle(Exception ex)
         => ex switch
         {
-            ValidationException or DomainValidationException => "Bad request",
+            ValidationException or DomainValidationException or EventAlreadyStartedException => "Bad request",
+            ForbiddenException => "Forbidden",
             NotFoundException => "Not Found",
             NoAvailableSeatsException => "No available seats",
+            BookingLimitExceededException => "Booking limit exceeded",
             _ => "Internal Server Error",
         };
 }
