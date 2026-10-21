@@ -18,6 +18,14 @@ internal sealed class BookingRepository(AppDbContext context) : IBookingReposito
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<int> CountActiveByUserAsync(Guid userId, CancellationToken cancellationToken = default)
+    {
+        return await context.Bookings
+            .CountAsync(b => b.UserId == userId
+                && (b.Status == BookingStatus.Pending || b.Status == BookingStatus.Confirmed),
+                cancellationToken);
+    }
+
     public async Task AddAsync(Booking newBooking)
     {
         context.Bookings.Add(newBooking);
