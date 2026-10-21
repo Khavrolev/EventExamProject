@@ -1,4 +1,5 @@
 using EventExamProject.Application.Abstractions;
+using EventExamProject.Domain.Entities;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -36,6 +37,13 @@ internal class BookingProcessingService(IServiceScopeFactory scopeFactory, ILogg
     {
         await Task.Delay(ProcessingDelay, stoppingToken);
 
+        await HandleBookingAsync(bookingId, stoppingToken);
+    }
+
+    // The booking is re-read here, after the delay, so it may have been cancelled in the meantime.
+    // Only bookings that are still Pending may be processed (and may give their seat back).
+    internal async Task HandleBookingAsync(Guid bookingId, CancellationToken stoppingToken)
+    {
         try
         {
             using var scope = scopeFactory.CreateScope();
@@ -46,6 +54,12 @@ internal class BookingProcessingService(IServiceScopeFactory scopeFactory, ILogg
 
             if (booking == null)
             {
+                return;
+            }
+
+            if (booking.Status != BookingStatus.Pending)
+            {
+                logger.LogInformation("Booking {BookingId} is already {Status}, skipping", booking.Id, booking.Status);
                 return;
             }
 
@@ -78,7 +92,7 @@ internal class BookingProcessingService(IServiceScopeFactory scopeFactory, ILogg
 
             var booking = await bookingRepository.GetByIdAsync(bookingId, stoppingToken);
 
-            if (booking == null)
+            if (booking == null || booking.Status != BookingStatus.Pending)
             {
                 return;
             }

@@ -1,4 +1,5 @@
 using EventExamProject.Domain.Entities;
+using EventExamProject.Domain.Exceptions;
 using EventExamProject.Infrastructure.Repositories;
 using EventExamProject.IntegrationTests.Infrastructure;
 using FluentAssertions;
@@ -40,7 +41,37 @@ public class UserRepositoryTests(DatabaseFixture fixture) : RepositoryTestBase(f
         var act = () => repository.AddAsync(User.Create("alice", "OTHER"));
 
         // Assert
-        await act.Should().ThrowAsync<DbUpdateException>("the unique index on Login should reject duplicates");
+        await act.Should().ThrowAsync<DomainValidationException>("the unique index on Login should reject duplicates")
+            .WithMessage("*alice*");
+    }
+
+    [Fact]
+    public async Task AddAsync_ShouldAllowOnlyOneUser_WhenSameLoginIsAddedConcurrently()
+    {
+        // Arrange: separate contexts, like separate HTTP requests
+        var attempts = Enumerable.Range(0, 10).Select(_ => Task.Run(async () =>
+        {
+            await using var context = CreateContext();
+            var repository = new UserRepository(context);
+
+            try
+            {
+                await repository.AddAsync(User.Create("alice", "HASH"));
+                return true;
+            }
+            catch (DomainValidationException)
+            {
+                return false;
+            }
+        }));
+
+        // Act
+        var results = await Task.WhenAll(attempts);
+
+        // Assert
+        results.Count(succeeded => succeeded).Should().Be(1);
+        await using var verificationContext = CreateContext();
+        (await verificationContext.Users.CountAsync()).Should().Be(1);
     }
 
     [Fact]

@@ -7,10 +7,20 @@ namespace EventExamProject.Presentation.Extensions;
 
 public static class AuthenticationExtensions
 {
+    private const int MinSecretBytes = 32;
+
     public static IServiceCollection AddJwtAuthentication(this IServiceCollection services, IConfiguration configuration)
     {
         var jwtOptions = configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>()
             ?? throw new InvalidOperationException($"Configuration section '{JwtOptions.SectionName}' is missing");
+
+        if (jwtOptions.Secret is null || Encoding.UTF8.GetByteCount(jwtOptions.Secret) < MinSecretBytes)
+        {
+            throw new InvalidOperationException(
+                $"'{JwtOptions.SectionName}:Secret' must be configured and at least {MinSecretBytes} bytes long. " +
+                "Set it via the Jwt__Secret environment variable or user-secrets " +
+                "(dotnet user-secrets set \"Jwt:Secret\" \"<secret>\").");
+        }
 
         services
             .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)

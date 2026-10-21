@@ -98,4 +98,46 @@ public class BookingTests
 
         act.Should().Throw<DomainValidationException>();
     }
+
+    [Theory]
+    [InlineData(BookingStatus.Confirmed)]
+    [InlineData(BookingStatus.Rejected)]
+    [InlineData(BookingStatus.Cancelled)]
+    public void Confirm_ShouldThrowDomainValidationException_WhenBookingIsNotPending(BookingStatus status)
+    {
+        var booking = CreateBookingWithStatus(status);
+
+        var act = () => booking.Confirm();
+
+        act.Should().Throw<DomainValidationException>();
+        booking.Status.Should().Be(status);
+    }
+
+    [Theory]
+    [InlineData(BookingStatus.Confirmed)]
+    [InlineData(BookingStatus.Rejected)]
+    [InlineData(BookingStatus.Cancelled)]
+    public void Reject_ShouldThrowDomainValidationException_WhenBookingIsNotPending(BookingStatus status)
+    {
+        var booking = CreateBookingWithStatus(status);
+
+        var act = () => booking.Reject();
+
+        act.Should().Throw<DomainValidationException>();
+        booking.Status.Should().Be(status);
+    }
+
+    private static Booking CreateBookingWithStatus(BookingStatus status)
+    {
+        var booking = Booking.CreatePending(Guid.NewGuid(), Guid.NewGuid());
+
+        switch (status)
+        {
+            case BookingStatus.Confirmed: booking.Confirm(); break;
+            case BookingStatus.Rejected: booking.Reject(); break;
+            case BookingStatus.Cancelled: booking.Cancel(); break;
+        }
+
+        return booking;
+    }
 }

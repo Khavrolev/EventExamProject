@@ -31,12 +31,16 @@ public class Booking
     
     public void Confirm()
     {
+        EnsurePending(nameof(Confirm));
+
         Status = BookingStatus.Confirmed;
         ProcessedAt = DateTime.UtcNow;
     }
     
     public void Reject()
     {
+        EnsurePending(nameof(Reject));
+
         Status = BookingStatus.Rejected;
         ProcessedAt = DateTime.UtcNow;
     }
@@ -50,5 +54,14 @@ public class Booking
 
         Status = BookingStatus.Cancelled;
         ProcessedAt = DateTime.UtcNow;
+    }
+
+    private void EnsurePending(string operation)
+    {
+        if (Status != BookingStatus.Pending)
+        {
+            throw new DomainValidationException(
+                $"Cannot {operation.ToLowerInvariant()} a booking in status {Status}: only pending bookings can be processed");
+        }
     }
 }
