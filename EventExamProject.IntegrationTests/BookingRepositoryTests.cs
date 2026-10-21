@@ -32,8 +32,9 @@ public class BookingRepositoryTests(DatabaseFixture fixture) : RepositoryTestBas
     {
         // Arrange
         var seededEvent = await SeedEventAsync();
+        var userId = (await SeedUserAsync()).Id;
         var repository = new BookingRepository(Context);
-        var booking = Booking.CreatePending(seededEvent.Id);
+        var booking = Booking.CreatePending(seededEvent.Id, userId);
 
         // Act
         await repository.AddAsync(booking);
@@ -44,6 +45,7 @@ public class BookingRepositoryTests(DatabaseFixture fixture) : RepositoryTestBas
 
         stored.Should().NotBeNull();
         stored!.EventId.Should().Be(seededEvent.Id);
+        stored.UserId.Should().Be(userId);
         stored.Status.Should().Be(BookingStatus.Pending);
     }
 
@@ -52,8 +54,9 @@ public class BookingRepositoryTests(DatabaseFixture fixture) : RepositoryTestBas
     {
         // Arrange
         var seededEvent = await SeedEventAsync();
+        var userId = (await SeedUserAsync()).Id;
         var repository = new BookingRepository(Context);
-        var booking = Booking.CreatePending(seededEvent.Id);
+        var booking = Booking.CreatePending(seededEvent.Id, userId);
         await repository.AddAsync(booking);
 
         // Act
@@ -71,8 +74,9 @@ public class BookingRepositoryTests(DatabaseFixture fixture) : RepositoryTestBas
     {
         // Arrange
         var seededEvent = await SeedEventAsync();
+        var userId = (await SeedUserAsync()).Id;
         var repository = new BookingRepository(Context);
-        var booking = Booking.CreatePending(seededEvent.Id);
+        var booking = Booking.CreatePending(seededEvent.Id, userId);
         await repository.AddAsync(booking);
 
         // Act
@@ -101,8 +105,9 @@ public class BookingRepositoryTests(DatabaseFixture fixture) : RepositoryTestBas
     {
         // Arrange
         var seededEvent = await SeedEventAsync();
+        var userId = (await SeedUserAsync()).Id;
         var repository = new BookingRepository(Context);
-        var booking = Booking.CreatePending(seededEvent.Id);
+        var booking = Booking.CreatePending(seededEvent.Id, userId);
         await repository.AddAsync(booking);
 
         // Act
@@ -122,8 +127,9 @@ public class BookingRepositoryTests(DatabaseFixture fixture) : RepositoryTestBas
     {
         // Arrange
         var seededEvent = await SeedEventAsync();
+        var userId = (await SeedUserAsync()).Id;
         var repository = new BookingRepository(Context);
-        var booking = Booking.CreatePending(seededEvent.Id);
+        var booking = Booking.CreatePending(seededEvent.Id, userId);
         await repository.AddAsync(booking);
 
         // Act
@@ -143,15 +149,16 @@ public class BookingRepositoryTests(DatabaseFixture fixture) : RepositoryTestBas
     {
         // Arrange
         var seededEvent = await SeedEventAsync();
+        var userId = (await SeedUserAsync()).Id;
         var repository = new BookingRepository(Context);
 
-        var pendingA = Booking.CreatePending(seededEvent.Id);
-        var pendingB = Booking.CreatePending(seededEvent.Id);
+        var pendingA = Booking.CreatePending(seededEvent.Id, userId);
+        var pendingB = Booking.CreatePending(seededEvent.Id, userId);
 
-        var confirmed = Booking.CreatePending(seededEvent.Id);
+        var confirmed = Booking.CreatePending(seededEvent.Id, userId);
         confirmed.Confirm();
 
-        var rejected = Booking.CreatePending(seededEvent.Id);
+        var rejected = Booking.CreatePending(seededEvent.Id, userId);
         rejected.Reject();
 
         await repository.AddAsync(pendingA);
@@ -184,12 +191,79 @@ public class BookingRepositoryTests(DatabaseFixture fixture) : RepositoryTestBas
     {
         // Arrange
         var repository = new BookingRepository(Context);
-        var booking = Booking.CreatePending(Guid.NewGuid());
+        var booking = Booking.CreatePending(Guid.NewGuid(), (await SeedUserAsync()).Id);
 
         // Act
         var act = () => repository.AddAsync(booking);
 
         // Assert
         await act.Should().ThrowAsync<DbUpdateException>("the foreign key to events should reject an unknown EventId");
+    }
+
+    [Fact]
+    public async Task AddAsync_ShouldThrow_WhenUserDoesNotExist()
+    {
+        // Arrange
+        var seededEvent = await SeedEventAsync();
+        var repository = new BookingRepository(Context);
+        var booking = Booking.CreatePending(seededEvent.Id, Guid.NewGuid());
+
+        // Act
+        var act = () => repository.AddAsync(booking);
+
+        // Assert
+        await act.Should().ThrowAsync<DbUpdateException>("the foreign key to users should reject an unknown UserId");
+    }
+
+    [Fact]
+    public async Task CountActiveByUserAsync_ShouldCountOnlyPendingAndConfirmedBookingsOfThatUser()
+    {
+        // Arrange
+        var seededEvent = await SeedEventAsync();
+        var user = await SeedUserAsync();
+        var otherUser = await SeedUserAsync();
+        var repository = new BookingRepository(Context);
+
+        var pending = Booking.CreatePending(seededEvent.Id, user.Id);
+        var confirmed = Booking.CreatePending(seededEvent.Id, user.Id);
+        confirmed.Confirm();
+        var rejected = Booking.CreatePending(seededEvent.Id, user.Id);
+        rejected.Reject();
+        var cancelled = Booking.CreatePending(seededEvent.Id, user.Id);
+        cancelled.Cancel();
+        var foreign = Booking.CreatePending(seededEvent.Id, otherUser.Id);
+
+        foreach (var booking in new[] { pending, confirmed, rejected, cancelled, foreign })
+        {
+            await repository.AddAsync(booking);
+        }
+
+        // Act
+        var count = await repository.CountActiveByUserAsync(user.Id);
+
+        // Assert
+        count.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_ShouldPersistCancelledStatus_ToDatabase()
+    {
+        // Arrange
+        var seededEvent = await SeedEventAsync();
+        var userId = (await SeedUserAsync()).Id;
+        var repository = new BookingRepository(Context);
+        var booking = Booking.CreatePending(seededEvent.Id, userId);
+        await repository.AddAsync(booking);
+
+        // Act
+        booking.Cancel();
+        await repository.UpdateAsync(booking);
+
+        // Assert
+        await using var verificationContext = CreateContext();
+        var stored = await verificationContext.Bookings.FindAsync(booking.Id);
+
+        stored!.Status.Should().Be(BookingStatus.Cancelled);
+        stored.ProcessedAt.Should().NotBeNull();
     }
 }
