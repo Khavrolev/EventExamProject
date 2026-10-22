@@ -1,5 +1,5 @@
-using System.ComponentModel.DataAnnotations;
 using EventExamProject.Domain.Entities;
+using EventExamProject.Domain.Exceptions;
 using EventExamProject.Domain.ValueObjects;
 using FluentAssertions;
 
@@ -76,7 +76,7 @@ public class EventTests
 
         var act = () => @event.ReleaseSeats();
 
-        act.Should().Throw<ValidationException>();
+        act.Should().Throw<DomainValidationException>();
     }
 
     [Fact]
@@ -122,7 +122,7 @@ public class EventTests
 
         var act = () => @event.Update(new EventDetails("Event", null, StartAt, EndAt, TotalSeats: 2));
 
-        act.Should().Throw<ValidationException>();
+        act.Should().Throw<DomainValidationException>();
         @event.TotalSeats.Should().Be(5);
         @event.AvailableSeats.Should().Be(2);
     }

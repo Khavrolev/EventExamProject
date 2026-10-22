@@ -119,7 +119,8 @@ public class EventRepositoryTests(DatabaseFixture fixture) : RepositoryTestBase(
         var eventWithBooking = CreateEvent();
         await repository.AddAsync(eventWithBooking);
 
-        var booking = Booking.CreatePending(eventWithBooking.Id);
+        var user = await SeedUserAsync();
+        var booking = Booking.CreatePending(eventWithBooking.Id, user.Id);
         Context.Bookings.Add(booking);
         await Context.SaveChangesAsync();
 

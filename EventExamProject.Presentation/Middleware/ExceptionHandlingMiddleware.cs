@@ -2,13 +2,15 @@ using EventExamProject.Domain.Exceptions;
 using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Mvc;
 
-namespace EventExamProject.Middleware;
+namespace EventExamProject.Presentation.Middleware;
 
 public class ExceptionHandlingMiddleware
 {
+    private const string GenericErrorDetail = "An unexpected error occurred. Please try again later.";
+
     private readonly RequestDelegate _next;
     private readonly ILogger<ExceptionHandlingMiddleware> _logger;
-    
+
     public ExceptionHandlingMiddleware(
         RequestDelegate next,
         ILogger<ExceptionHandlingMiddleware> logger)
@@ -16,7 +18,7 @@ public class ExceptionHandlingMiddleware
         _next = next;
         _logger = logger;
     }
-    
+
     public async Task InvokeAsync(HttpContext httpContext)
     {
         try
@@ -28,7 +30,7 @@ public class ExceptionHandlingMiddleware
             await HandleException(httpContext, ex);
         }
     }
-    
+
     private async Task HandleException(HttpContext httpContext, Exception ex)
     {
         _logger.LogError(
@@ -37,7 +39,7 @@ public class ExceptionHandlingMiddleware
             httpContext.Request.Method,
             httpContext.Request.Path,
             httpContext.Request.Headers["x-request-id"]);
-            
+
         if (httpContext.Response.HasStarted)
         {
             return;
@@ -45,15 +47,18 @@ public class ExceptionHandlingMiddleware
 
         var statusCode = MapStatusCode(ex);
         var title = MapTitle(ex);
-        
+
         httpContext.Response.StatusCode = statusCode;
         httpContext.Response.ContentType = "application/json";
 
         var error = new ProblemDetails
         {
-            Title=title,
+            Title = title,
             Status = statusCode,
-            Detail = ex.Message
+            // Exception details are logged above; only known, mapped exceptions are safe
+            // to echo back to the client — an unmapped (500) exception could leak internals
+            // (e.g. raw database error text), so it gets a generic message instead.
+            Detail = statusCode == StatusCodes.Status500InternalServerError ? GenericErrorDetail : ex.Message
         };
 
         await httpContext.Response.WriteAsJsonAsync(error);
@@ -62,18 +67,21 @@ public class ExceptionHandlingMiddleware
     private static int MapStatusCode(Exception ex)
         => ex switch
         {
-            ValidationException => StatusCodes.Status400BadRequest,
+            ValidationException or DomainValidationException or EventAlreadyStartedException => StatusCodes.Status400BadRequest,
+            ForbiddenException => StatusCodes.Status403Forbidden,
             NotFoundException => StatusCodes.Status404NotFound,
-            NoAvailableSeatsException => StatusCodes.Status409Conflict,
+            NoAvailableSeatsException or BookingLimitExceededException => StatusCodes.Status409Conflict,
             _ => StatusCodes.Status500InternalServerError,
         };
-    
+
     private static string MapTitle(Exception ex)
         => ex switch
         {
-            ValidationException => "Bad request",
+            ValidationException or DomainValidationException or EventAlreadyStartedException => "Bad request",
+            ForbiddenException => "Forbidden",
             NotFoundException => "Not Found",
             NoAvailableSeatsException => "No available seats",
+            BookingLimitExceededException => "Booking limit exceeded",
             _ => "Internal Server Error",
         };
 }

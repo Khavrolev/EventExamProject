@@ -7,6 +7,7 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.13" />
         <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.8" />
         <!-- Required by `dotnet ef` tooling: the EF CLI needs Design referenced by the startup project,
              even though AppDbContext and migrations live in EventExamProject.Infrastructure. -->

@@ -1,4 +1,4 @@
-using System.ComponentModel.DataAnnotations;
+using EventExamProject.Domain.Exceptions;
 using EventExamProject.Domain.ValueObjects;
 
 namespace EventExamProject.Domain.Entities;
@@ -23,7 +23,7 @@ public class Event
     {
         if (details.TotalSeats <= 0)
         {
-            throw new ValidationException("TotalSeats must be greater than zero");
+            throw new DomainValidationException("TotalSeats must be greater than zero");
         }
 
         return new Event
@@ -42,7 +42,7 @@ public class Event
     {
         if (details.TotalSeats <= 0)
         {
-            throw new ValidationException("TotalSeats must be greater than zero");
+            throw new DomainValidationException("TotalSeats must be greater than zero");
         }
 
         Title = details.Title;
@@ -56,7 +56,7 @@ public class Event
 
             if (details.TotalSeats < bookedSeats)
             {
-                throw new ValidationException("TotalSeats cannot be less than the number of seats already booked");
+                throw new DomainValidationException("TotalSeats cannot be less than the number of seats already booked");
             }
 
             AvailableSeats = details.TotalSeats - bookedSeats;
@@ -91,7 +91,7 @@ public class Event
     {
         if (this.AvailableSeats + count > this.TotalSeats)
         {
-            throw new ValidationException("Cannot release more seats than available");
+            throw new DomainValidationException("Cannot release more seats than available");
         }
         
         this.AvailableSeats = this.AvailableSeats + count;

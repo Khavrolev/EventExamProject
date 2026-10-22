@@ -22,7 +22,7 @@ public class MigrationsTests(DatabaseFixture fixture) : RepositoryTestBase(fixtu
     }
 
     [Fact]
-    public async Task Migrate_ShouldCreateEventsAndBookingsTables()
+    public async Task Migrate_ShouldCreateEventsBookingsAndUsersTables()
     {
         // Arrange
         var connection = await OpenConnectionAsync();
@@ -39,11 +39,11 @@ public class MigrationsTests(DatabaseFixture fixture) : RepositoryTestBase(fixtu
         }
 
         // Assert
-        tableNames.Should().Contain(["events", "bookings"]);
+        tableNames.Should().Contain(["events", "bookings", "users"]);
     }
 
     [Fact]
-    public async Task Migrate_ShouldCreatePrimaryKeys_OnBothTables()
+    public async Task Migrate_ShouldCreatePrimaryKeys_OnAllTables()
     {
         // Arrange
         var connection = await OpenConnectionAsync();
@@ -53,7 +53,7 @@ public class MigrationsTests(DatabaseFixture fixture) : RepositoryTestBase(fixtu
             """
             SELECT tc.table_name
             FROM information_schema.table_constraints tc
-            WHERE tc.constraint_type = 'PRIMARY KEY' AND tc.table_name IN ('events', 'bookings')
+            WHERE tc.constraint_type = 'PRIMARY KEY' AND tc.table_name IN ('events', 'bookings', 'users')
             """, connection);
         await using var reader = await command.ExecuteReaderAsync();
 
@@ -64,7 +64,7 @@ public class MigrationsTests(DatabaseFixture fixture) : RepositoryTestBase(fixtu
         }
 
         // Assert
-        tablesWithPrimaryKey.Should().BeEquivalentTo(["events", "bookings"]);
+        tablesWithPrimaryKey.Should().BeEquivalentTo(["events", "bookings", "users"]);
     }
 
     [Fact]
@@ -81,7 +81,7 @@ public class MigrationsTests(DatabaseFixture fixture) : RepositoryTestBase(fixtu
             JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name
             JOIN information_schema.constraint_column_usage ccu ON tc.constraint_name = ccu.constraint_name
             JOIN information_schema.referential_constraints rc ON tc.constraint_name = rc.constraint_name
-            WHERE tc.constraint_type = 'FOREIGN KEY' AND tc.table_name = 'bookings'
+            WHERE tc.constraint_type = 'FOREIGN KEY' AND tc.table_name = 'bookings' AND kcu.column_name = 'EventId'
             """, connection);
         await using var reader = await command.ExecuteReaderAsync();
 
@@ -96,5 +96,45 @@ public class MigrationsTests(DatabaseFixture fixture) : RepositoryTestBase(fixtu
         referencedTable.Should().Be("events");
         referencedColumn.Should().Be("Id");
         deleteRule.Should().Be("CASCADE");
+    }
+
+    [Fact]
+    public async Task Migrate_ShouldCreateForeignKey_FromBookingsToUsers()
+    {
+        // Arrange
+        var connection = await OpenConnectionAsync();
+
+        // Act
+        await using var command = new NpgsqlCommand(
+            """
+            SELECT ccu.table_name AS referenced_table, ccu.column_name AS referenced_column
+            FROM information_schema.table_constraints tc
+            JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name
+            JOIN information_schema.constraint_column_usage ccu ON tc.constraint_name = ccu.constraint_name
+            WHERE tc.constraint_type = 'FOREIGN KEY' AND tc.table_name = 'bookings' AND kcu.column_name = 'UserId'
+            """, connection);
+        await using var reader = await command.ExecuteReaderAsync();
+
+        (await reader.ReadAsync()).Should().BeTrue("bookings should have a foreign key to users");
+
+        // Assert
+        reader.GetString(0).Should().Be("users");
+        reader.GetString(1).Should().Be("Id");
+    }
+
+    [Fact]
+    public async Task Migrate_ShouldCreateUniqueIndex_OnUserLogin()
+    {
+        // Arrange
+        var connection = await OpenConnectionAsync();
+
+        // Act
+        await using var command = new NpgsqlCommand(
+            "SELECT indexdef FROM pg_indexes WHERE tablename = 'users' AND indexname = 'IX_users_Login'", connection);
+        var definition = (string?)await command.ExecuteScalarAsync();
+
+        // Assert
+        definition.Should().NotBeNull();
+        definition.Should().Contain("UNIQUE");
     }
 }
