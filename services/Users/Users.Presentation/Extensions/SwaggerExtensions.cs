@@ -14,6 +14,19 @@ public static class SwaggerExtensions
                 Version = "v1",
                 Description = "Сервис аутентификации и пользователей"
             });
+
+            options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+            {
+                Type = SecuritySchemeType.Http,
+                Scheme = "bearer",
+                BearerFormat = "JWT",
+                Description = "Вставьте JWT-токен"
+            });
+
+            options.AddSecurityRequirement(document => new OpenApiSecurityRequirement
+            {
+                [new OpenApiSecuritySchemeReference("Bearer", document)] = []
+            });
         });
 
         return services;
