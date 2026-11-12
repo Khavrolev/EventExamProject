@@ -62,12 +62,10 @@ public class BookingProcessingService(
                 return;
             }
 
-            // 1. First update booking status in own database
             booking.Confirm();
             await bookingRepository.UpdateAsync(booking);
             logger.LogInformation("Booking {BookingId} confirmed in database", booking.Id);
 
-            // 2. Only after successful database persist, publish event to Kafka
             var confirmedEvent = new BookingConfirmed(
                 BookingId: booking.Id,
                 EventId: booking.EventId,

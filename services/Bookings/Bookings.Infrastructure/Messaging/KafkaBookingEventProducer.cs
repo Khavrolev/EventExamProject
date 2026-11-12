@@ -32,8 +32,6 @@ public sealed class KafkaBookingEventProducer : IBookingEventProducer, IDisposab
         var json = JsonSerializer.Serialize(@event);
         var message = new Message<string, string>
         {
-            // Message key is EventId to guarantee all bookings for a single event
-            // are written to the same partition and consumed in strict order.
             Key = @event.EventId.ToString(),
             Value = json
         };
