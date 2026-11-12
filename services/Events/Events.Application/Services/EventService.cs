@@ -1,0 +1,92 @@
+using System.ComponentModel.DataAnnotations;
+using Events.Application.Abstractions;
+using Events.Application.DTOs;
+using Events.Application.Services.Interfaces;
+using Events.Domain.Entities;
+using Events.Domain.Exceptions;
+using Events.Domain.ValueObjects;
+
+namespace Events.Application.Services;
+
+public class EventService(IEventRepository eventRepository) : IEventService
+{
+    private static void ValidateDates(EventDto dto)
+    {
+        if (dto.EndAt <= dto.StartAt)
+        {
+            throw new ValidationException($"{nameof(dto.EndAt)} must be later than {nameof(dto.StartAt)}");
+        }
+    }
+
+    public async Task<PaginatedResultDto<EventInfoDto>> GetAllEventsAsync(EventFilterDto filter, PaginationParamsDto paginationParams)
+    {
+        var result = await eventRepository.GetAllAsync(filter, paginationParams);
+
+        return new PaginatedResultDto<EventInfoDto>
+        {
+            Data = result.Data.Select(EventInfoDto.FromEvent).ToList(),
+            TotalCount = result.TotalCount,
+            Page = result.Page,
+            PageSize = result.PageSize
+        };
+    }
+
+    public async Task<EventInfoDto> GetEventByIdAsync(Guid id)
+    {
+        var foundEvent = await eventRepository.GetByIdAsync(id);
+
+        return foundEvent is null
+            ? throw new NotFoundException($"Event with id {id} was not found")
+            : EventInfoDto.FromEvent(foundEvent);
+    }
+
+    public async Task<EventInfoDto> CreateEventAsync(EventDto newEvent)
+    {
+        ValidateDates(newEvent);
+
+        var newEventEntity = Event.Create(new EventDetails(
+            newEvent.Title,
+            newEvent.Description,
+            newEvent.StartAt,
+            newEvent.EndAt,
+            newEvent.TotalSeats!.Value));
+        await eventRepository.AddAsync(newEventEntity);
+
+        return EventInfoDto.FromEvent(newEventEntity);
+    }
+
+    public async Task<EventInfoDto> UpdateEventAsync(Guid id, EventDto updatedEvent)
+    {
+        var existingEvent = await eventRepository.GetByIdAsync(id);
+
+        if (existingEvent == null)
+        {
+            throw new NotFoundException($"Event with id {id} was not found");
+        }
+
+        ValidateDates(updatedEvent);
+
+        existingEvent.Update(new EventDetails(
+            updatedEvent.Title,
+            updatedEvent.Description,
+            updatedEvent.StartAt,
+            updatedEvent.EndAt,
+            updatedEvent.TotalSeats!.Value));
+
+        await eventRepository.UpdateAsync(existingEvent);
+
+        return EventInfoDto.FromEvent(existingEvent);
+    }
+
+    public async Task DeleteEventAsync(Guid id)
+    {
+        var eventToDelete = await eventRepository.GetByIdAsync(id);
+
+        if (eventToDelete == null)
+        {
+            throw new NotFoundException($"Event with id {id} was not found");
+        }
+
+        await eventRepository.DeleteAsync(eventToDelete);
+    }
+}

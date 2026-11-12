@@ -1,0 +1,41 @@
+using Users.Application.Abstractions;
+using Users.Application.DTOs;
+using Users.Application.Services.Interfaces;
+using Users.Domain.Entities;
+using Users.Domain.Exceptions;
+
+namespace Users.Application.Services;
+
+public class UserService(
+    IUserRepository userRepository,
+    IPasswordHasher passwordHasher,
+    IJwtTokenGenerator jwtTokenGenerator) : IUserService
+{
+    private const string InvalidCredentialsMessage = "Invalid login or password";
+
+    public async Task RegisterAsync(RegisterUserDto dto)
+    {
+        var login = dto.Login.Trim();
+
+        if (await userRepository.GetByLoginAsync(login) is not null)
+        {
+            throw new DomainValidationException($"User with login '{login}' already exists");
+        }
+
+        var user = User.Create(login, passwordHasher.Hash(dto.Password), UserRole.User);
+
+        await userRepository.AddAsync(user);
+    }
+
+    public async Task<TokenDto> LoginAsync(LoginDto dto)
+    {
+        var user = await userRepository.GetByLoginAsync(dto.Login.Trim());
+
+        if (user is null || !passwordHasher.Verify(dto.Password, user.PasswordHash))
+        {
+            throw new DomainValidationException(InvalidCredentialsMessage);
+        }
+
+        return new TokenDto { Token = jwtTokenGenerator.GenerateToken(user.Id, user.Login, user.Role) };
+    }
+}
