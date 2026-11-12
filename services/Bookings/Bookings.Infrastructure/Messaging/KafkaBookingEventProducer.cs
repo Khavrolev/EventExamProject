@@ -27,20 +27,31 @@ public sealed class KafkaBookingEventProducer : IBookingEventProducer, IDisposab
         _producer = new ProducerBuilder<string, string>(config).Build();
     }
 
-    public async Task PublishBookingConfirmedAsync(BookingConfirmed @event, CancellationToken cancellationToken = default)
+    public async Task PublishAsync(string topic, string key, string payload, CancellationToken cancellationToken = default)
     {
-        var json = JsonSerializer.Serialize(@event);
         var message = new Message<string, string>
         {
-            Key = @event.EventId.ToString(),
-            Value = json
+            Key = key,
+            Value = payload
         };
 
-        var deliveryResult = await _producer.ProduceAsync(KafkaTopics.BookingConfirmed, message, cancellationToken);
+        var deliveryResult = await _producer.ProduceAsync(topic, message, cancellationToken);
 
         _logger.LogInformation(
-            "Published BookingConfirmed event for BookingId={BookingId}, EventId={EventId} to topic {Topic} (Partition={Partition}, Offset={Offset})",
-            @event.BookingId, @event.EventId, deliveryResult.Topic, deliveryResult.Partition.Value, deliveryResult.Offset.Value);
+            "Published message to topic {Topic} (Partition={Partition}, Offset={Offset}, Key={Key})",
+            deliveryResult.Topic, deliveryResult.Partition.Value, deliveryResult.Offset.Value, key);
+    }
+
+    public Task PublishBookingConfirmedAsync(BookingConfirmed @event, CancellationToken cancellationToken = default)
+    {
+        var json = JsonSerializer.Serialize(@event);
+        return PublishAsync(KafkaTopics.BookingConfirmed, @event.EventId.ToString(), json, cancellationToken);
+    }
+
+    public Task PublishBookingCancelledAsync(BookingCancelled @event, CancellationToken cancellationToken = default)
+    {
+        var json = JsonSerializer.Serialize(@event);
+        return PublishAsync(KafkaTopics.BookingCancelled, @event.EventId.ToString(), json, cancellationToken);
     }
 
     public void Dispose()

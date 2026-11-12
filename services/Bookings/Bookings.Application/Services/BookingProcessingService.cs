@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Bookings.Application.Abstractions;
 using Bookings.Domain.Entities;
 using Contracts;
@@ -48,6 +49,7 @@ public class BookingProcessingService(
         {
             using var scope = scopeFactory.CreateScope();
             var bookingRepository = scope.ServiceProvider.GetRequiredService<IBookingRepository>();
+            var outboxRepository = scope.ServiceProvider.GetRequiredService<IOutboxRepository>();
 
             var booking = await bookingRepository.GetByIdAsync(bookingId, stoppingToken);
 
@@ -73,8 +75,23 @@ public class BookingProcessingService(
                 SeatsCount: 1,
                 ConfirmedAt: booking.ProcessedAt ?? DateTime.UtcNow);
 
-            await eventProducer.PublishBookingConfirmedAsync(confirmedEvent, stoppingToken);
-            logger.LogInformation("Published BookingConfirmed event for booking {BookingId}", booking.Id);
+            var outboxMessage = OutboxMessage.Create(
+                KafkaTopics.BookingConfirmed,
+                booking.EventId.ToString(),
+                JsonSerializer.Serialize(confirmedEvent));
+
+            await outboxRepository.AddAsync(outboxMessage, stoppingToken);
+
+            try
+            {
+                await eventProducer.PublishBookingConfirmedAsync(confirmedEvent, stoppingToken);
+                await outboxRepository.MarkAsProcessedAsync(outboxMessage.Id, stoppingToken);
+                logger.LogInformation("Published BookingConfirmed event for booking {BookingId}", booking.Id);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Failed to publish immediately for booking {BookingId}, queued in outbox", booking.Id);
+            }
         }
         catch (OperationCanceledException)
         {

@@ -41,19 +41,17 @@ public class ExceptionHandlingMiddleware
 
         var statusCode = ex switch
         {
-            ValidationException or DomainValidationException or EventAlreadyStartedException => StatusCodes.Status400BadRequest,
+            ValidationException or DomainValidationException => StatusCodes.Status400BadRequest,
             ForbiddenException => StatusCodes.Status403Forbidden,
             NotFoundException => StatusCodes.Status404NotFound,
-            NoAvailableSeatsException => StatusCodes.Status409Conflict,
             _ => StatusCodes.Status500InternalServerError,
         };
 
         var title = ex switch
         {
-            ValidationException or DomainValidationException or EventAlreadyStartedException => "Bad request",
+            ValidationException or DomainValidationException => "Bad request",
             ForbiddenException => "Forbidden",
             NotFoundException => "Not Found",
-            NoAvailableSeatsException => "No available seats",
             _ => "Internal Server Error",
         };
 

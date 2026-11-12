@@ -22,7 +22,7 @@ public class UserService(
             throw new DomainValidationException($"User with login '{login}' already exists");
         }
 
-        var user = User.Create(login, passwordHasher.Hash(dto.Password), dto.Role);
+        var user = User.Create(login, passwordHasher.Hash(dto.Password), UserRole.User);
 
         await userRepository.AddAsync(user);
     }

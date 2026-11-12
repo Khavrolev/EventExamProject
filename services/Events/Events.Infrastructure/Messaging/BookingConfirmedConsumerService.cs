@@ -3,7 +3,6 @@ using Confluent.Kafka;
 using Contracts;
 using Events.Domain.Entities;
 using Events.Infrastructure.Persistence;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -14,6 +13,7 @@ namespace Events.Infrastructure.Messaging;
 public class BookingConfirmedConsumerService(
     IServiceScopeFactory scopeFactory,
     IOptions<KafkaConsumerOptions> options,
+    IProducer<string, string> producer,
     ILogger<BookingConfirmedConsumerService> logger) : BackgroundService
 {
     private readonly KafkaConsumerOptions _options = options.Value;
@@ -38,22 +38,30 @@ public class BookingConfirmedConsumerService(
 
         try
         {
-            consumer.Subscribe(KafkaTopics.BookingConfirmed);
-            logger.LogInformation("Subscribed to Kafka topic '{Topic}' with GroupId '{GroupId}'",
-                KafkaTopics.BookingConfirmed, _options.ConsumerGroup);
+            consumer.Subscribe([KafkaTopics.BookingConfirmed, KafkaTopics.BookingCancelled]);
+            logger.LogInformation("Subscribed to Kafka topics '{Confirmed}' and '{Cancelled}' with GroupId '{GroupId}'",
+                KafkaTopics.BookingConfirmed, KafkaTopics.BookingCancelled, _options.ConsumerGroup);
 
             while (!stoppingToken.IsCancellationRequested)
             {
+                ConsumeResult<string, string>? consumeResult = null;
                 try
                 {
-                    var consumeResult = consumer.Consume(stoppingToken);
+                    consumeResult = consumer.Consume(stoppingToken);
 
                     if (consumeResult?.Message?.Value is null)
                     {
                         continue;
                     }
 
-                    ProcessMessage(consumeResult.Message.Value, stoppingToken);
+                    if (consumeResult.Topic == KafkaTopics.BookingConfirmed)
+                    {
+                        ProcessBookingConfirmed(consumeResult.Message.Value);
+                    }
+                    else if (consumeResult.Topic == KafkaTopics.BookingCancelled)
+                    {
+                        ProcessBookingCancelled(consumeResult.Message.Value);
+                    }
 
                     consumer.StoreOffset(consumeResult);
                 }
@@ -67,7 +75,19 @@ public class BookingConfirmedConsumerService(
                 }
                 catch (Exception ex)
                 {
-                    logger.LogError(ex, "Unexpected error processing message from topic '{Topic}'", KafkaTopics.BookingConfirmed);
+                    logger.LogError(ex, "Unexpected error processing message, seeking to retry");
+                    if (consumeResult != null)
+                    {
+                        try
+                        {
+                            consumer.Seek(consumeResult.TopicPartitionOffset);
+                            Thread.Sleep(2000);
+                        }
+                        catch (Exception seekEx)
+                        {
+                            logger.LogError(seekEx, "Failed to seek consumer");
+                        }
+                    }
                 }
             }
         }
@@ -84,7 +104,7 @@ public class BookingConfirmedConsumerService(
         }
     }
 
-    private void ProcessMessage(string messageJson, CancellationToken cancellationToken)
+    private void ProcessBookingConfirmed(string messageJson)
     {
         BookingConfirmed? bookingEvent;
 
@@ -100,7 +120,6 @@ public class BookingConfirmedConsumerService(
 
         if (bookingEvent == null)
         {
-            logger.LogWarning("Skipping null BookingConfirmed payload");
             return;
         }
 
@@ -118,17 +137,34 @@ public class BookingConfirmedConsumerService(
         var eventEntity = context.Events.Find(bookingEvent.EventId);
         if (eventEntity == null)
         {
-            logger.LogWarning("Event with Id {EventId} not found for Booking {BookingId}. Skipping message.",
+            logger.LogWarning("Event with Id {EventId} not found for Booking {BookingId}. Rejecting booking.",
                 bookingEvent.EventId, bookingEvent.BookingId);
+
+            PublishBookingRejected(bookingEvent.BookingId, bookingEvent.EventId, "Event not found");
+
+            context.ProcessedBookings.Add(new ProcessedBooking
+            {
+                BookingId = bookingEvent.BookingId,
+                ProcessedAt = DateTime.UtcNow
+            });
+            context.SaveChanges();
             return;
         }
 
         var seatsToReserve = bookingEvent.SeatsCount > 0 ? bookingEvent.SeatsCount : 1;
         if (!eventEntity.TryReserveSeats(seatsToReserve))
         {
-            logger.LogWarning(
-                "Not enough available seats ({Available}/{Total}) for event {EventId} (BookingId: {BookingId}). Skipping.",
+            logger.LogWarning("Not enough available seats ({Available}/{Total}) for event {EventId} (BookingId: {BookingId}). Rejecting booking.",
                 eventEntity.AvailableSeats, eventEntity.TotalSeats, eventEntity.Id, bookingEvent.BookingId);
+
+            PublishBookingRejected(bookingEvent.BookingId, bookingEvent.EventId, "No available seats");
+
+            context.ProcessedBookings.Add(new ProcessedBooking
+            {
+                BookingId = bookingEvent.BookingId,
+                ProcessedAt = DateTime.UtcNow
+            });
+            context.SaveChanges();
             return;
         }
 
@@ -143,5 +179,67 @@ public class BookingConfirmedConsumerService(
         logger.LogInformation(
             "Reduced {Seats} available seat(s) for event {EventId} ({Title}) after confirming booking {BookingId}. Remaining: {RemainingSeats}",
             seatsToReserve, eventEntity.Id, eventEntity.Title, bookingEvent.BookingId, eventEntity.AvailableSeats);
+    }
+
+    private void ProcessBookingCancelled(string messageJson)
+    {
+        BookingCancelled? cancelledEvent;
+
+        try
+        {
+            cancelledEvent = JsonSerializer.Deserialize<BookingCancelled>(messageJson);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to deserialize BookingCancelled message: {MessageJson}", messageJson);
+            return;
+        }
+
+        if (cancelledEvent == null)
+        {
+            return;
+        }
+
+        using var scope = scopeFactory.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<EventsDbContext>();
+
+        var processed = context.ProcessedBookings.Find(cancelledEvent.BookingId);
+        if (processed == null)
+        {
+            logger.LogInformation("Booking {BookingId} was never processed, skipping cancellation", cancelledEvent.BookingId);
+            return;
+        }
+
+        var eventEntity = context.Events.Find(cancelledEvent.EventId);
+        if (eventEntity != null)
+        {
+            var seatsToRelease = cancelledEvent.SeatsCount > 0 ? cancelledEvent.SeatsCount : 1;
+            eventEntity.ReleaseSeats(seatsToRelease);
+            context.ProcessedBookings.Remove(processed);
+            context.SaveChanges();
+
+            logger.LogInformation(
+                "Released {Seats} seat(s) for event {EventId} after cancellation of booking {BookingId}. Remaining: {RemainingSeats}",
+                seatsToRelease, eventEntity.Id, cancelledEvent.BookingId, eventEntity.AvailableSeats);
+        }
+    }
+
+    private void PublishBookingRejected(Guid bookingId, Guid eventId, string reason)
+    {
+        try
+        {
+            var rejected = new BookingRejected(bookingId, eventId, reason, DateTime.UtcNow);
+            var json = JsonSerializer.Serialize(rejected);
+            producer.Produce(KafkaTopics.BookingRejected, new Message<string, string>
+            {
+                Key = eventId.ToString(),
+                Value = json
+            });
+            logger.LogInformation("Published BookingRejected for booking {BookingId}: {Reason}", bookingId, reason);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to publish BookingRejected for booking {BookingId}", bookingId);
+        }
     }
 }

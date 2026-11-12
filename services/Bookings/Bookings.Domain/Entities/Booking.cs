@@ -37,7 +37,10 @@ public class Booking
 
     public void Reject()
     {
-        EnsurePending(nameof(Reject));
+        if (Status == BookingStatus.Cancelled || Status == BookingStatus.Rejected)
+        {
+            throw new DomainValidationException($"Cannot reject a booking in status {Status}");
+        }
 
         Status = BookingStatus.Rejected;
         ProcessedAt = DateTime.UtcNow;

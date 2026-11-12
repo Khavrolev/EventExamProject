@@ -11,6 +11,13 @@ public class KafkaTopicInitializer(
     IOptions<KafkaConsumerOptions> options,
     ILogger<KafkaTopicInitializer> logger) : IHostedService
 {
+    private static readonly string[] Topics =
+    [
+        KafkaTopics.BookingConfirmed,
+        KafkaTopics.BookingCancelled,
+        KafkaTopics.BookingRejected
+    ];
+
     public async Task StartAsync(CancellationToken cancellationToken)
     {
         try
@@ -22,34 +29,37 @@ public class KafkaTopicInitializer(
 
             using var adminClient = new AdminClientBuilder(config).Build();
 
-            try
+            foreach (var topicName in Topics)
             {
-                var topicSpecification = new TopicSpecification
+                try
                 {
-                    Name = KafkaTopics.BookingConfirmed,
-                    NumPartitions = 3,
-                    ReplicationFactor = 1
-                };
+                    var topicSpecification = new TopicSpecification
+                    {
+                        Name = topicName,
+                        NumPartitions = 3,
+                        ReplicationFactor = 1
+                    };
 
-                await adminClient.CreateTopicsAsync([topicSpecification]);
-                logger.LogInformation("Topic '{Topic}' successfully created via admin client", KafkaTopics.BookingConfirmed);
-            }
-            catch (CreateTopicsException ex)
-            {
-                var alreadyExists = ex.Results.Any(r => r.Error.Code == ErrorCode.TopicAlreadyExists);
-                if (alreadyExists)
-                {
-                    logger.LogInformation("Topic '{Topic}' already exists, skipping creation", KafkaTopics.BookingConfirmed);
+                    await adminClient.CreateTopicsAsync([topicSpecification]);
+                    logger.LogInformation("Topic '{Topic}' successfully created via admin client", topicName);
                 }
-                else
+                catch (CreateTopicsException ex)
                 {
-                    logger.LogWarning(ex, "Kafka admin client could not create topic '{Topic}'", KafkaTopics.BookingConfirmed);
+                    var alreadyExists = ex.Results.Any(r => r.Error.Code == ErrorCode.TopicAlreadyExists);
+                    if (alreadyExists)
+                    {
+                        logger.LogInformation("Topic '{Topic}' already exists, skipping creation", topicName);
+                    }
+                    else
+                    {
+                        logger.LogWarning(ex, "Kafka admin client could not create topic '{Topic}'", topicName);
+                    }
                 }
             }
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "Could not initialize Kafka topic '{Topic}' on startup", KafkaTopics.BookingConfirmed);
+            logger.LogWarning(ex, "Could not initialize Kafka topics on startup");
         }
     }
 

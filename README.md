@@ -4,7 +4,7 @@
 
 ## Архитектура системы
 
-Монолитная архитектура декомпозирована на три независимых микросервиса с собственной базой данных у каждого (Database-per-Service) и асинхронным событийно-ориентированным взаимодействием через Apache Kafka.
+Монолитная архитектура декомпозирована на три независимых микросервиса с собственной базой данных у каждого (Database-per-Service), паттерном Transactional Outbox и асинхронным событийно-ориентированным взаимодействием через Apache Kafka.
 
 ```
                      ┌──────────────────┐
@@ -20,51 +20,62 @@
 └────────┬─────────┘ └────┬─────────▲───┘ └────────┬─────────┘
          │                │         │              │
          │ PostgreSQL     │         │              │ PostgreSQL
-         ▼ (:5455)        │         │ Kafka        ▼ (:5456)
-┌──────────────────┐      │         │ Topic        ┌──────────────────┐
-│  users database  │      │         │ 'booking-    │bookings database │
-└──────────────────┘      │         │  confirmed'  └──────────────────┘
-                          │         │              ▲
-               PostgreSQL │         └──────────────┤
-               (:5454)    ▼                        │
-         ┌──────────────────┐             ┌────────┴─────────┐
-         │ events database  │             │   Apache Kafka   │
-         │ (events +        │             │ (:9092 / :29092) │
-         │processed_bookings│             └────────▲─────────┘
-         └──────────────────┘                      │
-                                          ┌────────┴─────────┐
-                                          │    Zookeeper     │
-                                          └──────────────────┘
+         ▼ (:5455)        │         │ Kafka Topics:▼ (:5456)
+┌──────────────────┐      │         │ - booking-   ┌──────────────────┐
+│  users database  │      │         │   confirmed  │bookings database │
+└──────────────────┘      │         │ - booking-   │(bookings +       │
+                          │         │   cancelled  │ outbox_messages) │
+               PostgreSQL │         │ - booking-   └──────────────────┘
+               (:5454)    │         │   rejected   ▲
+         ┌────────────────┴─┐       │              │
+         │ events database  │───────┴──────────────┘
+         │ (events +        │       ▲
+         │processed_bookings│       │
+         └──────────────────┘┌──────┴──────────┐
+                             │  Apache Kafka   │
+                             │(:9092 / :29092) │
+                             └──────┬──────────┘
+                                    │
+                             ┌──────┴──────────┐
+                             │    Zookeeper    │
+                             └─────────────────┘
 ```
 
 ### Компоненты системы
 
 1. **`Users` Service (`services/Users/`)**
    - Управление пользователями, регистрация и аутентификация.
+   - Защита: публичная регистрация назначает исключительно роль `User`. Администратор создаётся автоматически при старте (логин `admin`, пароль `AdminPassword123!`, роль `Admin`).
+   - Пароли хешируются с использованием алгоритма PBKDF2 со случайной криптографической солью (100 000 итераций) и проверкой за константное время.
    - Генерация криптографически подписанных JWT-токенов с ролями (`User`, `Admin`).
    - Собственная база данных PostgreSQL `users`.
 
 2. **`Events` Service (`services/Events/`)**
    - Каталог мероприятий, расписание, вместимость и учет свободных мест.
+   - Токен конкурентности `xmin`: оптимистическая блокировка на уровне PostgreSQL для защиты от гонок между администратором (`PUT /events`) и подписчиком Kafka.
    - Авторизация на основе ролей: создание, изменение и удаление мероприятий разрешено только роли `Admin`.
-   - Фоновый сервис `BookingConfirmedConsumerService` — Kafka Consumer для топика `booking-confirmed`.
-   - Гарантия идемпотентности обработки сообщений через таблицу `processed_bookings`.
-   - Сервис инициализации топика `KafkaTopicInitializer` при старте через `IAdminClient`.
+   - Фоновый сервис `BookingConfirmedConsumerService`:
+     - Слушает топики `booking-confirmed` и `booking-cancelled`.
+     - При получении `booking-confirmed`: гарантирует идемпотентность через `processed_bookings`. Если мест нет или мероприятие не найдено — публикует `BookingRejected`.
+     - При получении `booking-cancelled`: освобождает место (`ReleaseSeats`) и удаляет запись из `processed_bookings`.
+     - Обработка ошибок: при сбое `SaveChanges` выполняет `consumer.Seek()` с паузой, предотвращая потерю сообщений.
+   - Фоновый сервис `KafkaTopicInitializer`: инициализирует топики `booking-confirmed`, `booking-cancelled`, `booking-rejected` (по 3 партиции) при старте.
    - Собственная база данных PostgreSQL `events`.
 
 3. **`Bookings` Service (`services/Bookings/`)**
-   - Регистрация заявок на бронирование мероприятий.
-   - Фоновый сервис `BookingProcessingService` — асинхронная обработка заявок со статусом `Pending`, перевод в статус `Confirmed`.
-   - Сервис `KafkaBookingEventProducer` — singleton-продюсер сообщений `BookingConfirmed` в Kafka с партиционированием по `EventId`.
+   - Регистрация и управление бронированиями мероприятий.
+   - Проверка прав: `GET /bookings/{id}` возвращает бронь только её владельцу либо администратору (для чужих пользователей возвращает `403 Forbidden`).
+   - Строковый статус бронирования: перечисление `BookingStatus` сериализуется строкой (`Pending`, `Confirmed`, `Rejected`, `Cancelled`).
+   - Transactional Outbox:
+     - При подтверждении бронирования запись `BookingConfirmed` сохраняется в таблицу `outbox_messages` в рамках одной транзакции с обновлением статуса брони.
+     - При отмене бронирования (`DELETE /bookings/{id}`) запись `BookingCancelled` сохраняется в `outbox_messages` в рамках транзакции отмены.
+     - Фоновый сервис `OutboxPublisherService` гарантирует доставку неотправленных сообщений даже при перезагрузке брокера.
+   - Фоновый сервис `BookingRejectedConsumerService`: слушает топик `booking-rejected` и переводит статус бронирования в `Rejected`, если в `Events` мероприятие не найдено или мест не хватило.
    - Собственная база данных PostgreSQL `bookings`.
 
 4. **`Contracts` Library (`shared/Contracts/`)**
-   - Общая сборка моделей сообщений и констант топиков Kafka (`KafkaTopics.BookingConfirmed`, `BookingConfirmedEvent`).
+   - Общая сборка моделей сообщений (`BookingConfirmed`, `BookingCancelled`, `BookingRejected`) и констант топиков (`KafkaTopics`).
    - Не содержит бизнес-логики и зависимостей от инфраструктуры.
-
-5. **`Apache Kafka & Zookeeper`**
-   - Брокер сообщений для асинхронного межсервисного взаимодействия.
-   - Топик `booking-confirmed` с партициями для масштабирования.
 
 ---
 
@@ -83,7 +94,9 @@
 
 ---
 
-## Поток данных события BookingConfirmed
+## Потоки данных событий
+
+### 1. Подтверждение бронирования (`BookingConfirmed`)
 
 ```
 [Client]
@@ -102,51 +115,93 @@
 
 ──────────────────────── АСИНХРОННЫЙ ПРОЦЕСС ────────────────────────
 
-[Bookings Service: BookingProcessingService (BackgroundService)]
+[Bookings Service: BookingProcessingService]
    │
-   │ 4. Периодический опрос Pending-бронирований
-   │ 5. Имитация обработки (Task.Delay 2s)
-   │ 6. Обновление статуса: Status = Confirmed, ProcessedAt = UtcNow
+   │ 4. Опрос Pending-бронирований
+   │ 5. Транзакция: Status = Confirmed + INSERT в outbox_messages
    ▼
 [PostgreSQL: bookings database]
    │
-   │ 7. Публикация события BookingConfirmed (Key = EventId)
+   │ 6. Немедленная отправка или через OutboxPublisherService
    ▼
-[Kafka: topic 'booking-confirmed']
+[Kafka: topic 'booking-confirmed' (Key = EventId)]
    │
-   │ 8. Получение сообщения (GroupId = 'events-consumer-group')
+   │ 7. Получение сообщения (GroupId = 'events-consumer-group')
    ▼
-[Events Service: BookingConfirmedConsumerService (BackgroundService)]
+[Events Service: BookingConfirmedConsumerService]
    │
-   │ 9. Проверка идемпотентности: SELECT EXISTS в processed_bookings
-   │ 10. Если не обработано:
-   │     - UPDATE events SET AvailableSeats = AvailableSeats - 1
-   │     - INSERT INTO processed_bookings (BookingId, ProcessedAt)
+   │ 8. Проверка идемпотентности по таблице processed_bookings
+   │ 9. Если мероприятие найдено и есть места:
+   │    - AvailableSeats = AvailableSeats - 1 (с проверкой xmin)
+   │    - INSERT в processed_bookings
+   │    Иначе:
+   │    - Публикация BookingRejected в топик 'booking-rejected'
    ▼
 [PostgreSQL: events database]
    │
-   │ 11. Фиксация offset (Commit) в Kafka
+   │ 10. Фиксация offset (Commit) в Kafka
    ▼
 [Kafka Broker]
 ```
 
-### Гарантии надежности и идемпотентности:
-- **Сохранение в БД перед отправкой:** `Bookings` сначала гарантированно фиксирует статус `Confirmed` в БД `bookings`, и только после успешного коммита отправляет событие в Kafka.
-- **Партиционирование:** Ключом Kafka-сообщения является `EventId`, что гарантирует строгую очередность обработки событий одного мероприятия в рамках одной партиции.
-- **Идемпотентность на стороне потребителя:** Сервис `Events` сохраняет `BookingId` в таблицу `processed_bookings`. При повторной доставке сообщения (at-least-once доставка) дублирующее событие пропускается, исключая повторное списание мест.
-- **Устойчивость к недоступности Kafka:** Сервис `Events` при старте выполняет создание топика через `IAdminClient` с обработкой исключений, не блокируя запуск сервиса, если брокер временно недоступен.
+### 2. Отмена бронирования (`BookingCancelled`)
+
+```
+[Client]
+   │
+   │ 1. DELETE /bookings/{id} + JWT
+   ▼
+[Bookings Service: BookingController]
+   │
+   │ 2. Транзакция: Status = Cancelled + INSERT в outbox_messages
+   ▼
+[PostgreSQL: bookings database]
+   │
+   │ 3. 204 No Content
+   ▼
+[Client]
+
+──────────────────────── АСИНХРОННЫЙ ПРОЦЕСС ────────────────────────
+
+[Bookings Service: OutboxPublisherService]
+   │
+   │ 4. Публикация BookingCancelled (Key = EventId)
+   ▼
+[Kafka: topic 'booking-cancelled']
+   │
+   │ 5. Получение сообщения
+   ▼
+[Events Service: BookingConfirmedConsumerService]
+   │
+   │ 6. AvailableSeats = AvailableSeats + 1
+   │ 7. DELETE из processed_bookings
+   ▼
+[PostgreSQL: events database]
+```
+
+### 3. Компенсация при отказе (`BookingRejected`)
+
+```
+[Events Service]
+   │
+   │ Мероприятие не найдено или нет свободных мест
+   ▼
+[Kafka: topic 'booking-rejected']
+   │
+   │ Получение сообщения
+   ▼
+[Bookings Service: BookingRejectedConsumerService]
+   │
+   │ Status = Rejected, ProcessedAt = UtcNow
+   ▼
+[PostgreSQL: bookings database]
+```
 
 ---
 
 ## Запуск системы через Docker Compose
 
-Для запуска всех сервисов, баз данных и инфраструктуры Kafka требуется одна команда:
-
-```bash
-docker compose up -d
-```
-
-Для пересборки контейнеров после изменения исходного кода:
+Для запуска всех сервисов, баз данных и инфраструктуры Kafka:
 
 ```bash
 docker compose up -d --build
@@ -164,37 +219,25 @@ docker compose down
 docker compose down -v
 ```
 
-### Автоматическая миграция БД
-При старте каждого микросервиса автоматически вызывается `ApplyMigrations()`, который накатывает все недостающие миграции Entity Framework Core на соответствующую базу данных. Предварительное ручное создание таблиц не требуется.
-
 ---
 
-## Документация Swagger UI
+## Запуск тестов
 
-Каждый сервис предоставляет интерактивную документацию Swagger c поддержкой Bearer JWT:
+Юнит-тесты покрывают сущности `Booking`, `Event`, логику резервирования и освобождения мест, а также идемпотентность подписчика:
 
-- Users API: `http://localhost:5001/swagger`
-- Events API: `http://localhost:5002/swagger`
-- Bookings API: `http://localhost:5003/swagger`
-
-Для авторизации в Swagger UI:
-1. Выполните `POST /auth/login` в Users Service и скопируйте `token`.
-2. Нажмите кнопку **Authorize** в правом верхнем углу Swagger UI любого сервиса.
-3. Вставьте токен в поле Value (слово `Bearer` указывать не требуется, оно подставляется автоматически) и нажмите **Authorize**.
+```bash
+dotnet test
+```
 
 ---
 
 ## Сквозной сценарий тестирования (End-to-End)
 
-Ниже приведён полный сценарий проверки работоспособности через `curl` и утилиту `jq`.
+### Шаг 1. Получение токена администратора
 
-### Шаг 1. Регистрация и получение токена администратора
+Администратор создаётся автоматически при старте сервиса `Users`:
 
 ```bash
-curl -s -X POST http://localhost:5001/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"login":"admin","password":"AdminPassword123!","role":"Admin"}'
-
 ADMIN_TOKEN=$(curl -s -X POST http://localhost:5001/auth/login \
   -H "Content-Type: application/json" \
   -d '{"login":"admin","password":"AdminPassword123!"}' | jq -r .token)
@@ -203,8 +246,6 @@ echo "Admin Token: $ADMIN_TOKEN"
 ```
 
 ### Шаг 2. Создание мероприятия администратором
-
-Создание мероприятия требует роли `Admin` (без токена сервис возвращает `401 Unauthorized`, а с токеном роли `User` — `403 Forbidden`).
 
 ```bash
 EVENT_RESPONSE=$(curl -s -X POST http://localhost:5002/events \
@@ -223,14 +264,14 @@ EVENT_ID=$(echo "$EVENT_RESPONSE" | jq -r .id)
 echo "Created Event ID: $EVENT_ID"
 ```
 
-Начальное состояние: `totalSeats = 10`, `availableSeats = 10`.
+### Шаг 3. Регистрация обычного пользователя
 
-### Шаг 3. Регистрация обычного пользователя и получение токена
+При публичной регистрации всегда присваивается роль `User`:
 
 ```bash
 curl -s -X POST http://localhost:5001/auth/register \
   -H "Content-Type: application/json" \
-  -d '{"login":"user_alice","password":"UserPassword123!","role":"User"}'
+  -d '{"login":"user_alice","password":"UserPassword123!"}'
 
 USER_TOKEN=$(curl -s -X POST http://localhost:5001/auth/login \
   -H "Content-Type: application/json" \
@@ -239,9 +280,7 @@ USER_TOKEN=$(curl -s -X POST http://localhost:5001/auth/login \
 echo "User Token: $USER_TOKEN"
 ```
 
-### Шаг 4. Создание бронирования
-
-Запрос выполняется пользователем в Bookings Service:
+### Шаг 4. Создание бронирования пользователем
 
 ```bash
 BOOKING_RESPONSE=$(curl -s -X POST http://localhost:5003/bookings \
@@ -251,63 +290,39 @@ BOOKING_RESPONSE=$(curl -s -X POST http://localhost:5003/bookings \
 
 echo "$BOOKING_RESPONSE" | jq .
 BOOKING_ID=$(echo "$BOOKING_RESPONSE" | jq -r .id)
-echo "Created Booking ID: $BOOKING_ID"
 ```
 
-Ответ сервиса: `202 Accepted`, статус `0` (`Pending`).
+Ответ сервиса: `202 Accepted`, статус `"Pending"`.
 
-### Шаг 5. Ожидание асинхронной обработки и публикации события в Kafka
-
-Фоновый процесс `BookingProcessingService` с интервалом опроса проверяет заявки, переводит статус бронирования в `1` (`Confirmed`) и публикует `BookingConfirmed` в Kafka топик `booking-confirmed`.
+### Шаг 5. Ожидание асинхронной обработки и Kafka
 
 ```bash
 sleep 4
 ```
 
-### Шаг 6. Проверка подтверждения бронирования в Bookings Service
+### Шаг 6. Проверка подтверждения бронирования
 
 ```bash
 curl -s -X GET "http://localhost:5003/bookings/$BOOKING_ID" \
   -H "Authorization: Bearer $USER_TOKEN" | jq .
 ```
+Статус бронирования: `"Confirmed"`.
 
-Статус бронирования изменился на `1` (`Confirmed`), поле `processedAt` заполнено датой обработки.
-
-### Шаг 7. Проверка уменьшения свободных мест в Events Service
-
-Фоновый сервис `BookingConfirmedConsumerService` принял событие из Kafka и уменьшил количество доступных мест:
+### Шаг 7. Проверка уменьшения свободных мест
 
 ```bash
 curl -s -X GET "http://localhost:5002/events/$EVENT_ID" | jq .
 ```
+Поле `availableSeats`: `9` (уменьшилось на 1).
 
-Результат:
-```json
-{
-  "id": "...",
-  "title": "HighLoad .NET Architecture",
-  "totalSeats": 10,
-  "availableSeats": 9
-}
-```
-Значение `availableSeats` уменьшилось с 10 до 9, подтверждая успешное сквозное асинхронное взаимодействие между микросервисами через Kafka.
-
----
-
-## Локальная разработка и сборка решения
-
-Сборка всего решения со всеми микросервисами и общей библиотекой контрактов:
+### Шаг 8. Отмена бронирования и возврат места
 
 ```bash
-dotnet build EventExamProject.sln
+curl -s -X DELETE "http://localhost:5003/bookings/$BOOKING_ID" \
+  -H "Authorization: Bearer $USER_TOKEN"
+
+sleep 3
+
+curl -s -X GET "http://localhost:5002/events/$EVENT_ID" | jq .
 ```
-
-### Запуск сервисов локально вне Docker
-
-При локальном запуске каждый сервис подключается к соответствующей базе данных и локальному брокеру Kafka:
-
-```bash
-dotnet run --project services/Users/Users.Presentation/Users.Presentation.csproj
-dotnet run --project services/Events/Events.Presentation/Events.Presentation.csproj
-dotnet run --project services/Bookings/Bookings.Presentation/Bookings.Presentation.csproj
-```
+Поле `availableSeats`: снова `10` (место успешно возвращено через событие `BookingCancelled`).

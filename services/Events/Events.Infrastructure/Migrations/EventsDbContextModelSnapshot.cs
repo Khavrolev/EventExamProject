@@ -48,6 +48,12 @@ namespace Events.Infrastructure.Migrations
                     b.Property<int>("TotalSeats")
                         .HasColumnType("integer");
 
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
                     b.HasKey("Id");
 
                     b.ToTable("events", (string)null);

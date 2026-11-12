@@ -32,5 +32,10 @@ internal sealed class EventConfiguration : IEntityTypeConfiguration<Event>
 
         builder.Property(e => e.AvailableSeats)
             .IsRequired();
+
+        builder.Property<uint>("xmin")
+            .HasColumnType("xid")
+            .ValueGeneratedOnAddOrUpdate()
+            .IsConcurrencyToken();
     }
 }

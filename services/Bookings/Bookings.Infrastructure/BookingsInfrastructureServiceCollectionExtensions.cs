@@ -21,6 +21,10 @@ public static class BookingsInfrastructureServiceCollectionExtensions
         services.AddSingleton<IBookingEventProducer, KafkaBookingEventProducer>();
 
         services.AddScoped<IBookingRepository, BookingRepository>();
+        services.AddScoped<IOutboxRepository, OutboxRepository>();
+
+        services.AddHostedService<OutboxPublisherService>();
+        services.AddHostedService<BookingRejectedConsumerService>();
 
         return services;
     }

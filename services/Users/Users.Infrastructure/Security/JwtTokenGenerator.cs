@@ -14,6 +14,10 @@ internal class JwtTokenGenerator(IOptions<JwtOptions> options) : IJwtTokenGenera
 
     public string GenerateToken(Guid userId, string login, UserRole role)
     {
+        var secret = !string.IsNullOrEmpty(_options.Secret)
+            ? _options.Secret
+            : Environment.GetEnvironmentVariable("JWT_SECRET") ?? "super_secret_jwt_key_for_microservices_exam_2026_test_token_secret!";
+
         var claims = new[]
         {
             new Claim(JwtRegisteredClaimNames.Sub, userId.ToString()),
@@ -22,7 +26,7 @@ internal class JwtTokenGenerator(IOptions<JwtOptions> options) : IJwtTokenGenera
             new Claim(ClaimTypes.Role, role.ToString())
         };
 
-        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_options.Secret));
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
         var token = new JwtSecurityToken(

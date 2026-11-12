@@ -20,7 +20,7 @@ public static class UsersInfrastructureServiceCollectionExtensions
         services.Configure<JwtOptions>(configuration.GetSection(JwtOptions.SectionName));
 
         services.AddScoped<IUserRepository, UserRepository>();
-        services.AddScoped<IPasswordHasher, Sha256PasswordHasher>();
+        services.AddScoped<IPasswordHasher, Pbkdf2PasswordHasher>();
         services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
 
         return services;

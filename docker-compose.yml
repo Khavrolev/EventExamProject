@@ -27,7 +27,7 @@ services:
       KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:29092,EXTERNAL://localhost:9092
       KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
     healthcheck:
       test: ["CMD-SHELL", "kafka-topics --bootstrap-server localhost:29092 --list || exit 1"]
       interval: 10s
@@ -94,7 +94,7 @@ services:
       - "5001:5001"
     environment:
       - ConnectionStrings__DefaultConnection=Host=users-db;Port=5432;Database=users;Username=postgres;Password=postgres
-      - Jwt__Secret=super_secret_jwt_key_for_microservices_exam_2026_test_token_secret!
+      - Jwt__Secret=${JWT_SECRET:-super_secret_jwt_key_for_microservices_exam_2026_test_token_secret!}
       - Jwt__Issuer=EventExamProject
       - Jwt__Audience=EventExamProject.Clients
       - ASPNETCORE_ENVIRONMENT=Development
@@ -111,7 +111,7 @@ services:
       - "5002:5002"
     environment:
       - ConnectionStrings__DefaultConnection=Host=events-db;Port=5432;Database=events;Username=postgres;Password=postgres
-      - Jwt__Secret=super_secret_jwt_key_for_microservices_exam_2026_test_token_secret!
+      - Jwt__Secret=${JWT_SECRET:-super_secret_jwt_key_for_microservices_exam_2026_test_token_secret!}
       - Jwt__Issuer=EventExamProject
       - Jwt__Audience=EventExamProject.Clients
       - Kafka__BootstrapServers=kafka:29092
@@ -132,7 +132,7 @@ services:
       - "5003:5003"
     environment:
       - ConnectionStrings__DefaultConnection=Host=bookings-db;Port=5432;Database=bookings;Username=postgres;Password=postgres
-      - Jwt__Secret=super_secret_jwt_key_for_microservices_exam_2026_test_token_secret!
+      - Jwt__Secret=${JWT_SECRET:-super_secret_jwt_key_for_microservices_exam_2026_test_token_secret!}
       - Jwt__Issuer=EventExamProject
       - Jwt__Audience=EventExamProject.Clients
       - Kafka__BootstrapServers=kafka:29092
@@ -142,6 +142,8 @@ services:
         condition: service_healthy
       kafka:
         condition: service_healthy
+      events-service:
+        condition: service_started
 
 volumes:
   users-db-data:
