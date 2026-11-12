@@ -1,5 +1,6 @@
 using Bookings.Application.Abstractions;
 using Bookings.Domain.Entities;
+using Contracts;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -8,6 +9,7 @@ namespace Bookings.Application.Services;
 
 public class BookingProcessingService(
     IServiceScopeFactory scopeFactory,
+    IBookingEventProducer eventProducer,
     ILogger<BookingProcessingService> logger) : BackgroundService
 {
     private const int PollingInterval = 5000;
@@ -60,9 +62,21 @@ public class BookingProcessingService(
                 return;
             }
 
+            // 1. First update booking status in own database
             booking.Confirm();
             await bookingRepository.UpdateAsync(booking);
             logger.LogInformation("Booking {BookingId} confirmed in database", booking.Id);
+
+            // 2. Only after successful database persist, publish event to Kafka
+            var confirmedEvent = new BookingConfirmed(
+                BookingId: booking.Id,
+                EventId: booking.EventId,
+                UserId: booking.UserId,
+                SeatsCount: 1,
+                ConfirmedAt: booking.ProcessedAt ?? DateTime.UtcNow);
+
+            await eventProducer.PublishBookingConfirmedAsync(confirmedEvent, stoppingToken);
+            logger.LogInformation("Published BookingConfirmed event for booking {BookingId}", booking.Id);
         }
         catch (OperationCanceledException)
         {

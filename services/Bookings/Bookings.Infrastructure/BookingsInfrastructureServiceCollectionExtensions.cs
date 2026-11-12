@@ -1,4 +1,5 @@
 using Bookings.Application.Abstractions;
+using Bookings.Infrastructure.Messaging;
 using Bookings.Infrastructure.Persistence;
 using Bookings.Infrastructure.Repositories;
 using Microsoft.EntityFrameworkCore;
@@ -15,6 +16,9 @@ public static class BookingsInfrastructureServiceCollectionExtensions
     {
         services.AddDbContext<BookingsDbContext>(options =>
             options.UseNpgsql(configuration.GetConnectionString("DefaultConnection")));
+
+        services.Configure<KafkaOptions>(configuration.GetSection(KafkaOptions.SectionName));
+        services.AddSingleton<IBookingEventProducer, KafkaBookingEventProducer>();
 
         services.AddScoped<IBookingRepository, BookingRepository>();
 
