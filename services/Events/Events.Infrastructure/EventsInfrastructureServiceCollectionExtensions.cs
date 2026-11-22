@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using StackExchange.Redis;
 
 namespace Events.Infrastructure;
 
@@ -30,6 +31,17 @@ public static class EventsInfrastructureServiceCollectionExtensions
                 Acks = Acks.All
             };
             return new ProducerBuilder<string, string>(config).Build();
+        });
+
+        services.AddSingleton<IConnectionMultiplexer>(_ =>
+        {
+            var connectionString = configuration.GetSection("Redis")["ConnectionString"]
+                ?? configuration.GetConnectionString("Redis")
+                ?? "localhost:6379";
+
+            var configurationOptions = ConfigurationOptions.Parse(connectionString);
+            configurationOptions.AbortOnConnectFail = false;
+            return ConnectionMultiplexer.Connect(configurationOptions);
         });
 
         services.AddHostedService<KafkaTopicInitializer>();
