@@ -1,5 +1,6 @@
 using Confluent.Kafka;
 using Events.Application.Abstractions;
+using Events.Infrastructure.Caching;
 using Events.Infrastructure.Messaging;
 using Events.Infrastructure.Persistence;
 using Events.Infrastructure.Repositories;
@@ -43,6 +44,8 @@ public static class EventsInfrastructureServiceCollectionExtensions
             configurationOptions.AbortOnConnectFail = false;
             return ConnectionMultiplexer.Connect(configurationOptions);
         });
+
+        services.AddSingleton<ICacheService, RedisCacheService>();
 
         services.AddHostedService<KafkaTopicInitializer>();
         services.AddHostedService<BookingConfirmedConsumerService>();
