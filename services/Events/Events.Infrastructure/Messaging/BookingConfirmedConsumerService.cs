@@ -1,6 +1,9 @@
 using System.Text.Json;
 using Confluent.Kafka;
 using Contracts;
+using Events.Application.Abstractions;
+using Events.Application.Common;
+using Events.Application.DTOs;
 using Events.Domain.Entities;
 using Events.Infrastructure.Persistence;
 using Microsoft.Extensions.DependencyInjection;
@@ -20,10 +23,10 @@ public class BookingConfirmedConsumerService(
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        return Task.Run(() => ConsumeLoop(stoppingToken), stoppingToken);
+        return Task.Run(async () => await ConsumeLoopAsync(stoppingToken), stoppingToken);
     }
 
-    private void ConsumeLoop(CancellationToken stoppingToken)
+    private async Task ConsumeLoopAsync(CancellationToken stoppingToken)
     {
         var config = new ConsumerConfig
         {
@@ -56,11 +59,11 @@ public class BookingConfirmedConsumerService(
 
                     if (consumeResult.Topic == KafkaTopics.BookingConfirmed)
                     {
-                        ProcessBookingConfirmed(consumeResult.Message.Value);
+                        await ProcessBookingConfirmedAsync(consumeResult.Message.Value, stoppingToken);
                     }
                     else if (consumeResult.Topic == KafkaTopics.BookingCancelled)
                     {
-                        ProcessBookingCancelled(consumeResult.Message.Value);
+                        await ProcessBookingCancelledAsync(consumeResult.Message.Value, stoppingToken);
                     }
 
                     consumer.StoreOffset(consumeResult);
@@ -81,7 +84,7 @@ public class BookingConfirmedConsumerService(
                         try
                         {
                             consumer.Seek(consumeResult.TopicPartitionOffset);
-                            Thread.Sleep(2000);
+                            await Task.Delay(2000, stoppingToken);
                         }
                         catch (Exception seekEx)
                         {
@@ -104,7 +107,7 @@ public class BookingConfirmedConsumerService(
         }
     }
 
-    private void ProcessBookingConfirmed(string messageJson)
+    private async Task ProcessBookingConfirmedAsync(string messageJson, CancellationToken cancellationToken)
     {
         BookingConfirmed? bookingEvent;
 
@@ -179,9 +182,11 @@ public class BookingConfirmedConsumerService(
         logger.LogInformation(
             "Reduced {Seats} available seat(s) for event {EventId} ({Title}) after confirming booking {BookingId}. Remaining: {RemainingSeats}",
             seatsToReserve, eventEntity.Id, eventEntity.Title, bookingEvent.BookingId, eventEntity.AvailableSeats);
+
+        await UpdateEventCacheAsync(scope.ServiceProvider, eventEntity, cancellationToken);
     }
 
-    private void ProcessBookingCancelled(string messageJson)
+    private async Task ProcessBookingCancelledAsync(string messageJson, CancellationToken cancellationToken)
     {
         BookingCancelled? cancelledEvent;
 
@@ -221,6 +226,29 @@ public class BookingConfirmedConsumerService(
             logger.LogInformation(
                 "Released {Seats} seat(s) for event {EventId} after cancellation of booking {BookingId}. Remaining: {RemainingSeats}",
                 seatsToRelease, eventEntity.Id, cancelledEvent.BookingId, eventEntity.AvailableSeats);
+
+            await UpdateEventCacheAsync(scope.ServiceProvider, eventEntity, cancellationToken);
+        }
+    }
+
+    private async Task UpdateEventCacheAsync(IServiceProvider serviceProvider, Event eventEntity, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var cacheService = serviceProvider.GetService<ICacheService>();
+            if (cacheService == null)
+            {
+                return;
+            }
+
+            var redisOptions = serviceProvider.GetService<IOptions<RedisOptions>>()?.Value ?? new RedisOptions();
+            var ttl = TimeSpan.FromMinutes(redisOptions.EventTtlMinutes);
+            var dto = EventInfoDto.FromEvent(eventEntity);
+            await cacheService.SetAsync(EventCacheKeys.Event(eventEntity.Id), dto, ttl, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to update cache for event {EventId} in Kafka consumer", eventEntity.Id);
         }
     }
 

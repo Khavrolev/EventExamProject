@@ -90,7 +90,11 @@ public class EventService(
             newEvent.TotalSeats!.Value));
         await eventRepository.AddAsync(newEventEntity);
 
-        return EventInfoDto.FromEvent(newEventEntity);
+        var dto = EventInfoDto.FromEvent(newEventEntity);
+        var ttl = TimeSpan.FromMinutes(_options.EventTtlMinutes);
+        await cacheService.SetAsync(EventCacheKeys.Event(newEventEntity.Id), dto, ttl);
+
+        return dto;
     }
 
     public async Task<EventInfoDto> UpdateEventAsync(Guid id, EventDto updatedEvent)
@@ -112,9 +116,12 @@ public class EventService(
             updatedEvent.TotalSeats!.Value));
 
         await eventRepository.UpdateAsync(existingEvent);
-        await cacheService.RemoveAsync(EventCacheKeys.Event(id));
 
-        return EventInfoDto.FromEvent(existingEvent);
+        var dto = EventInfoDto.FromEvent(existingEvent);
+        var ttl = TimeSpan.FromMinutes(_options.EventTtlMinutes);
+        await cacheService.SetAsync(EventCacheKeys.Event(id), dto, ttl);
+
+        return dto;
     }
 
     public async Task DeleteEventAsync(Guid id)
