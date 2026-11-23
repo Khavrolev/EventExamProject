@@ -281,7 +281,7 @@ docker compose down -v
 
 ## Запуск тестов
 
-Юнит-тесты покрывают сущности `Booking`, `Event`, логику резервирования и освобождения мест, а также идемпотентность подписчика:
+Юнит-тесты покрывают сущности `Booking`, `Event`, логику резервирования и освобождения мест, идемпотентность подписчика, а также все сценарии кеширования в Redis (Cache Hit, Cache Miss, Write-Through обновление, инвалидацию и порядок операций):
 
 ```bash
 dotnet test
@@ -384,3 +384,40 @@ sleep 3
 curl -s -X GET "http://localhost:5002/events/$EVENT_ID" | jq .
 ```
 Поле `availableSeats`: снова `10` (место успешно возвращено через событие `BookingCancelled`).
+
+### Шаг 9. Проверка виджета «Топ-10 популярных событий» и кеша Redis
+
+Запрос списка топ-10 мероприятий (без авторизации):
+
+```bash
+curl -s -X GET "http://localhost:5002/events/top" | jq .
+```
+
+Проверка наличия ключей и TTL в Redis контейнере:
+
+```bash
+# Список ключей в кеше
+docker exec eventapi-redis redis-cli keys "*"
+
+# Проверка значения и TTL кеша мероприятия (10 мин = ~600с)
+docker exec eventapi-redis redis-cli get "event:$EVENT_ID"
+docker exec eventapi-redis redis-cli ttl "event:$EVENT_ID"
+
+# Проверка TTL виджета топ-10 (5 мин = ~300с)
+docker exec eventapi-redis redis-cli ttl "events:top10"
+```
+
+### Шаг 10. Проверка устойчивости (Graceful Degradation при недоступном Redis)
+
+Сервис прозрачно переключается на базу данных при сбое Redis без ошибок для клиента:
+
+```bash
+# Временная остановка Redis
+docker stop eventapi-redis
+
+# Запрос выполняется успешно из PostgreSQL (200 OK)
+curl -s -w "\nHTTP_STATUS: %{http_code}\n" "http://localhost:5002/events/$EVENT_ID" | jq .
+
+# Запуск Redis обратно
+docker start eventapi-redis
+```
