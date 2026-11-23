@@ -6,3 +6,7 @@ obj/
 .DS_Store
 *.nupkg
 .env
+.nuget/
+.local/
+Library/
+**/.nuget/

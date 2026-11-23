@@ -85,6 +85,17 @@ services:
       timeout: 5s
       retries: 10
 
+  redis:
+    image: redis:7.2-alpine
+    container_name: eventapi-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   users-service:
     build:
       context: .
@@ -94,7 +105,7 @@ services:
       - "5001:5001"
     environment:
       - ConnectionStrings__DefaultConnection=Host=users-db;Port=5432;Database=users;Username=postgres;Password=postgres
-      - Jwt__Secret=${JWT_SECRET:-super_secret_jwt_key_for_microservices_exam_2026_test_token_secret!}
+      - Jwt__Secret=${JWT_SECRET}
       - Jwt__Issuer=EventExamProject
       - Jwt__Audience=EventExamProject.Clients
       - ASPNETCORE_ENVIRONMENT=Development
@@ -111,16 +122,19 @@ services:
       - "5002:5002"
     environment:
       - ConnectionStrings__DefaultConnection=Host=events-db;Port=5432;Database=events;Username=postgres;Password=postgres
-      - Jwt__Secret=${JWT_SECRET:-super_secret_jwt_key_for_microservices_exam_2026_test_token_secret!}
+      - Jwt__Secret=${JWT_SECRET}
       - Jwt__Issuer=EventExamProject
       - Jwt__Audience=EventExamProject.Clients
       - Kafka__BootstrapServers=kafka:29092
       - Kafka__ConsumerGroup=events-consumer-group
+      - Redis__ConnectionString=redis:6379
       - ASPNETCORE_ENVIRONMENT=Development
     depends_on:
       events-db:
         condition: service_healthy
       kafka:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
   bookings-service:
@@ -132,7 +146,7 @@ services:
       - "5003:5003"
     environment:
       - ConnectionStrings__DefaultConnection=Host=bookings-db;Port=5432;Database=bookings;Username=postgres;Password=postgres
-      - Jwt__Secret=${JWT_SECRET:-super_secret_jwt_key_for_microservices_exam_2026_test_token_secret!}
+      - Jwt__Secret=${JWT_SECRET}
       - Jwt__Issuer=EventExamProject
       - Jwt__Audience=EventExamProject.Clients
       - Kafka__BootstrapServers=kafka:29092

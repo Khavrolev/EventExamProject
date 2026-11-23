@@ -1,15 +1,22 @@
 using System.ComponentModel.DataAnnotations;
 using Events.Application.Abstractions;
+using Events.Application.Common;
 using Events.Application.DTOs;
 using Events.Application.Services.Interfaces;
 using Events.Domain.Entities;
 using Events.Domain.Exceptions;
 using Events.Domain.ValueObjects;
+using Microsoft.Extensions.Options;
 
 namespace Events.Application.Services;
 
-public class EventService(IEventRepository eventRepository) : IEventService
+public class EventService(
+    IEventRepository eventRepository,
+    ICacheService cacheService,
+    IOptions<RedisOptions>? redisOptions = null) : IEventService
 {
+    private readonly RedisOptions _options = redisOptions?.Value ?? new RedisOptions();
+
     private static void ValidateDates(EventDto dto)
     {
         if (dto.EndAt <= dto.StartAt)
@@ -31,13 +38,44 @@ public class EventService(IEventRepository eventRepository) : IEventService
         };
     }
 
+    public async Task<IReadOnlyList<EventInfoDto>> GetTopPopularEventsAsync(int count = 10)
+    {
+        var cacheKey = EventCacheKeys.Top(count);
+        var cached = await cacheService.GetAsync<List<EventInfoDto>>(cacheKey);
+        if (cached is not null)
+        {
+            return cached;
+        }
+
+        var topEvents = await eventRepository.GetTopPopularAsync(count);
+        var result = topEvents.Select(EventInfoDto.FromEvent).ToList();
+
+        var ttl = TimeSpan.FromMinutes(_options.Top10TtlMinutes);
+        await cacheService.SetAsync(cacheKey, result, ttl);
+
+        return result;
+    }
+
     public async Task<EventInfoDto> GetEventByIdAsync(Guid id)
     {
-        var foundEvent = await eventRepository.GetByIdAsync(id);
+        var cacheKey = EventCacheKeys.Event(id);
+        var cached = await cacheService.GetAsync<EventInfoDto>(cacheKey);
+        if (cached is not null)
+        {
+            return cached;
+        }
 
-        return foundEvent is null
-            ? throw new NotFoundException($"Event with id {id} was not found")
-            : EventInfoDto.FromEvent(foundEvent);
+        var foundEvent = await eventRepository.GetByIdAsync(id);
+        if (foundEvent is null)
+        {
+            throw new NotFoundException($"Event with id {id} was not found");
+        }
+
+        var dto = EventInfoDto.FromEvent(foundEvent);
+        var ttl = TimeSpan.FromMinutes(_options.EventTtlMinutes);
+        await cacheService.SetAsync(cacheKey, dto, ttl);
+
+        return dto;
     }
 
     public async Task<EventInfoDto> CreateEventAsync(EventDto newEvent)
@@ -52,7 +90,12 @@ public class EventService(IEventRepository eventRepository) : IEventService
             newEvent.TotalSeats!.Value));
         await eventRepository.AddAsync(newEventEntity);
 
-        return EventInfoDto.FromEvent(newEventEntity);
+        var dto = EventInfoDto.FromEvent(newEventEntity);
+        var ttl = TimeSpan.FromMinutes(_options.EventTtlMinutes);
+        await cacheService.SetAsync(EventCacheKeys.Event(newEventEntity.Id), dto, ttl);
+        await cacheService.RemoveAsync(EventCacheKeys.Top10);
+
+        return dto;
     }
 
     public async Task<EventInfoDto> UpdateEventAsync(Guid id, EventDto updatedEvent)
@@ -75,7 +118,12 @@ public class EventService(IEventRepository eventRepository) : IEventService
 
         await eventRepository.UpdateAsync(existingEvent);
 
-        return EventInfoDto.FromEvent(existingEvent);
+        var dto = EventInfoDto.FromEvent(existingEvent);
+        var ttl = TimeSpan.FromMinutes(_options.EventTtlMinutes);
+        await cacheService.SetAsync(EventCacheKeys.Event(id), dto, ttl);
+        await cacheService.RemoveAsync(EventCacheKeys.Top10);
+
+        return dto;
     }
 
     public async Task DeleteEventAsync(Guid id)
@@ -88,5 +136,7 @@ public class EventService(IEventRepository eventRepository) : IEventService
         }
 
         await eventRepository.DeleteAsync(eventToDelete);
+        await cacheService.RemoveAsync(EventCacheKeys.Event(id));
+        await cacheService.RemoveAsync(EventCacheKeys.Top10);
     }
 }

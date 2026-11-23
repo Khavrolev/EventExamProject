@@ -14,7 +14,12 @@ public static class AuthenticationExtensions
         var secret = configuration["Jwt:Secret"];
         if (string.IsNullOrEmpty(secret))
         {
-            secret = Environment.GetEnvironmentVariable("JWT_SECRET") ?? "super_secret_jwt_key_for_microservices_exam_2026_test_token_secret!";
+            secret = Environment.GetEnvironmentVariable("JWT_SECRET");
+        }
+
+        if (string.IsNullOrWhiteSpace(secret))
+        {
+            throw new InvalidOperationException("'Jwt:Secret' configuration or 'JWT_SECRET' environment variable is required.");
         }
 
         if (Encoding.UTF8.GetByteCount(secret) < MinSecretBytes)

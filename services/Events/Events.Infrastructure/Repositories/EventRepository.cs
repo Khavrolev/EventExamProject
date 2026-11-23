@@ -48,6 +48,16 @@ internal sealed class EventRepository(EventsDbContext context) : IEventRepositor
         };
     }
 
+    public async Task<IReadOnlyList<Event>> GetTopPopularAsync(int count = 10, CancellationToken cancellationToken = default)
+    {
+        return await context.Events
+            .Where(e => e.TotalSeats > 0)
+            .OrderByDescending(e => (double)(e.TotalSeats - e.AvailableSeats) / e.TotalSeats)
+            .ThenBy(e => e.Id)
+            .Take(count)
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task<Event?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
         await context.Events.FindAsync([id], cancellationToken);
 

@@ -1,5 +1,7 @@
 using Confluent.Kafka;
 using Events.Application.Abstractions;
+using Events.Application.Common;
+using Events.Infrastructure.Caching;
 using Events.Infrastructure.Messaging;
 using Events.Infrastructure.Persistence;
 using Events.Infrastructure.Repositories;
@@ -7,6 +9,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using StackExchange.Redis;
 
 namespace Events.Infrastructure;
 
@@ -20,6 +23,7 @@ public static class EventsInfrastructureServiceCollectionExtensions
             options.UseNpgsql(configuration.GetConnectionString("DefaultConnection")));
 
         services.Configure<KafkaConsumerOptions>(configuration.GetSection(KafkaConsumerOptions.SectionName));
+        services.Configure<RedisOptions>(configuration.GetSection(RedisOptions.SectionName));
 
         services.AddSingleton<IProducer<string, string>>(sp =>
         {
@@ -31,6 +35,24 @@ public static class EventsInfrastructureServiceCollectionExtensions
             };
             return new ProducerBuilder<string, string>(config).Build();
         });
+
+        services.AddSingleton<IConnectionMultiplexer>(sp =>
+        {
+            var redisOptions = sp.GetRequiredService<IOptions<RedisOptions>>().Value;
+            var connectionString = !string.IsNullOrWhiteSpace(redisOptions.ConnectionString)
+                ? redisOptions.ConnectionString
+                : configuration.GetConnectionString("Redis") ?? "localhost:6379";
+
+            var configurationOptions = ConfigurationOptions.Parse(connectionString);
+            configurationOptions.AbortOnConnectFail = false;
+            configurationOptions.ConnectTimeout = redisOptions.ConnectTimeoutMs;
+            configurationOptions.SyncTimeout = redisOptions.SyncTimeoutMs;
+            configurationOptions.AsyncTimeout = redisOptions.AsyncTimeoutMs;
+
+            return ConnectionMultiplexer.Connect(configurationOptions);
+        });
+
+        services.AddSingleton<ICacheService, RedisCacheService>();
 
         services.AddHostedService<KafkaTopicInitializer>();
         services.AddHostedService<BookingConfirmedConsumerService>();
