@@ -16,7 +16,12 @@ internal class JwtTokenGenerator(IOptions<JwtOptions> options) : IJwtTokenGenera
     {
         var secret = !string.IsNullOrEmpty(_options.Secret)
             ? _options.Secret
-            : Environment.GetEnvironmentVariable("JWT_SECRET") ?? "super_secret_jwt_key_for_microservices_exam_2026_test_token_secret!";
+            : Environment.GetEnvironmentVariable("JWT_SECRET");
+
+        if (string.IsNullOrWhiteSpace(secret))
+        {
+            throw new InvalidOperationException("'Jwt:Secret' configuration or 'JWT_SECRET' environment variable is required.");
+        }
 
         var claims = new[]
         {

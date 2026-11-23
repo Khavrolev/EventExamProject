@@ -36,14 +36,19 @@ public static class EventsInfrastructureServiceCollectionExtensions
             return new ProducerBuilder<string, string>(config).Build();
         });
 
-        services.AddSingleton<IConnectionMultiplexer>(_ =>
+        services.AddSingleton<IConnectionMultiplexer>(sp =>
         {
-            var connectionString = configuration.GetSection("Redis")["ConnectionString"]
-                ?? configuration.GetConnectionString("Redis")
-                ?? "localhost:6379";
+            var redisOptions = sp.GetRequiredService<IOptions<RedisOptions>>().Value;
+            var connectionString = !string.IsNullOrWhiteSpace(redisOptions.ConnectionString)
+                ? redisOptions.ConnectionString
+                : configuration.GetConnectionString("Redis") ?? "localhost:6379";
 
             var configurationOptions = ConfigurationOptions.Parse(connectionString);
             configurationOptions.AbortOnConnectFail = false;
+            configurationOptions.ConnectTimeout = redisOptions.ConnectTimeoutMs;
+            configurationOptions.SyncTimeout = redisOptions.SyncTimeoutMs;
+            configurationOptions.AsyncTimeout = redisOptions.AsyncTimeoutMs;
+
             return ConnectionMultiplexer.Connect(configurationOptions);
         });
 

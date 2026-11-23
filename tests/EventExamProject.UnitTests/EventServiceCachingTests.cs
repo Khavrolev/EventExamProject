@@ -109,7 +109,7 @@ public class EventServiceCachingTests
     }
 
     [Fact]
-    public async Task CreateEvent_WhenCalled_SavesToRepositoryAndUpdatesCache()
+    public async Task CreateEvent_WhenCalled_SavesToRepositoryUpdatesEventCacheAndInvalidatesTop()
     {
         // Arrange
         var newEventDto = new EventDto
@@ -134,10 +134,11 @@ public class EventServiceCachingTests
             It.Is<EventInfoDto>(dto => dto.Id == result.Id && dto.Title == newEventDto.Title),
             It.Is<TimeSpan?>(t => t.HasValue && t.Value.TotalMinutes == 10),
             It.IsAny<CancellationToken>()), Times.Once);
+        _cacheMock.Verify(c => c.RemoveAsync(EventCacheKeys.Top10, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
-    public async Task UpdateEvent_WhenCalled_UpdatesRepositoryAndUpdatesCache()
+    public async Task UpdateEvent_WhenCalled_UpdatesRepositoryUpdatesEventCacheAndInvalidatesTop()
     {
         // Arrange
         var eventId = Guid.NewGuid();
@@ -168,10 +169,11 @@ public class EventServiceCachingTests
             It.Is<EventInfoDto>(dto => dto.Id == eventId && dto.Title == "Updated Title"),
             It.Is<TimeSpan?>(t => t.HasValue && t.Value.TotalMinutes == 10),
             It.IsAny<CancellationToken>()), Times.Once);
+        _cacheMock.Verify(c => c.RemoveAsync(EventCacheKeys.Top10, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
-    public async Task DeleteEvent_WhenCalled_DeletesFromRepositoryAndRemovesFromCache()
+    public async Task DeleteEvent_WhenCalled_DeletesFromRepositoryRemovesEventCacheAndInvalidatesTop()
     {
         // Arrange
         var eventId = Guid.NewGuid();
@@ -187,6 +189,7 @@ public class EventServiceCachingTests
         // Assert
         _repositoryMock.Verify(r => r.DeleteAsync(existingEvent), Times.Once);
         _cacheMock.Verify(c => c.RemoveAsync(EventCacheKeys.Event(eventId), It.IsAny<CancellationToken>()), Times.Once);
+        _cacheMock.Verify(c => c.RemoveAsync(EventCacheKeys.Top10, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -220,6 +223,9 @@ public class EventServiceCachingTests
             It.IsAny<EventInfoDto>(),
             It.IsAny<TimeSpan?>(),
             It.IsAny<CancellationToken>()), Times.Never);
+        _cacheMock.Verify(c => c.RemoveAsync(
+            It.IsAny<string>(),
+            It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
@@ -244,7 +250,7 @@ public class EventServiceCachingTests
             .ReturnsAsync(cachedTop);
 
         // Act
-        var result = await _service.GetTopPopularEventsAsync();
+        var result = await _service.GetTopPopularEventsAsync(10);
 
         // Assert
         Assert.NotNull(result);
@@ -252,6 +258,39 @@ public class EventServiceCachingTests
         Assert.Equal(cachedTop[0].Id, result[0].Id);
 
         _cacheMock.Verify(c => c.GetAsync<List<EventInfoDto>>(EventCacheKeys.Top10, It.IsAny<CancellationToken>()), Times.Once);
+        _repositoryMock.Verify(r => r.GetTopPopularAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task GetTopPopularEvents_WithCustomCount_UsesCountInCacheKey()
+    {
+        // Arrange
+        const int count = 5;
+        var expectedKey = EventCacheKeys.Top(count);
+        var cachedTop = new List<EventInfoDto>
+        {
+            new()
+            {
+                Id = Guid.NewGuid(),
+                Title = "Top 5 Event",
+                StartAt = DateTime.UtcNow.AddDays(1),
+                EndAt = DateTime.UtcNow.AddDays(2),
+                TotalSeats = 100,
+                AvailableSeats = 10
+            }
+        };
+
+        _cacheMock
+            .Setup(c => c.GetAsync<List<EventInfoDto>>(expectedKey, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(cachedTop);
+
+        // Act
+        var result = await _service.GetTopPopularEventsAsync(count);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal("events:top5", expectedKey);
+        _cacheMock.Verify(c => c.GetAsync<List<EventInfoDto>>(expectedKey, It.IsAny<CancellationToken>()), Times.Once);
         _repositoryMock.Verify(r => r.GetTopPopularAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 

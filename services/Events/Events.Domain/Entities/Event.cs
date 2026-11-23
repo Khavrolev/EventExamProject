@@ -76,18 +76,18 @@ public class Event
         {
             return false;
         }
-        
+
         this.AvailableSeats -= count;
         return true;
     }
-    
+
     public void ReleaseSeats(int count = 1)
     {
         if (this.AvailableSeats + count > this.TotalSeats)
         {
             throw new DomainValidationException("Cannot release more seats than available");
         }
-        
+
         this.AvailableSeats += count;
     }
 }

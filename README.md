@@ -208,24 +208,25 @@
 В сервисе `Events` внедрено распределённое кеширование на базе **Redis** (библиотека `StackExchange.Redis`), существенно снижающее нагрузку на реляционную базу данных PostgreSQL при частом чтении.
 
 ### 1. Архитектурная изоляция и абстракция кеша
-- **Абстракция в слое Application**: интерфейс [`ICacheService`](file:///Users/khavrolev/projects/practicum/services/Events/Events.Application/Abstractions/ICacheService.cs) расположен в слое `Events.Application.Abstractions`. Слой приложения и доменная модель ничего не знают о библиотеке `StackExchange.Redis` или деталях сетевого протокола.
-- **Реализация в слое Infrastructure**: класс [`RedisCacheService`](file:///Users/khavrolev/projects/practicum/services/Events/Events.Infrastructure/Caching/RedisCacheService.cs) находится в `Events.Infrastructure.Caching`. Он инкапсулирует работу с `IConnectionMultiplexer`, `IDatabase`, JSON-сериализацию (`System.Text.Json`) и установку времени жизни (TTL).
-- **Регистрация в DI**: подключение `IConnectionMultiplexer` регистрируется как потокобезопасный **Singleton** с опцией `AbortOnConnectFail = false`.
+- **Абстракция в слое Application**: интерфейс [`ICacheService`](services/Events/Events.Application/Abstractions/ICacheService.cs) расположен в слое `Events.Application.Abstractions`. Слой приложения и доменная модель ничего не знают о библиотеке `StackExchange.Redis` или деталях сетевого протокола.
+- **Реализация в слое Infrastructure**: класс [`RedisCacheService`](services/Events/Events.Infrastructure/Caching/RedisCacheService.cs) находится в `Events.Infrastructure.Caching`. Он инкапсулирует работу с `IConnectionMultiplexer`, `IDatabase`, JSON-сериализацию (`System.Text.Json`) и установку времени жизни (TTL).
+- **Регистрация в DI**: подключение `IConnectionMultiplexer` регистрируется как потокобезопасный **Singleton** с опцией `AbortOnConnectFail = false` и настраиваемыми таймаутами (`ConnectTimeout`, `AsyncTimeout`, `SyncTimeout`).
 
 ### 2. Сценарии кеширования: что и почему кешируется
 
 | Сценарий / Ресурс | Ключ кеша | TTL | Стратегия обновления | Назначение и обоснование |
 |---|---|---|---|---|
 | **Отдельное мероприятие** (`GET /events/{id}`) | `event:{id}` | 10 мин | **Обновление при записи** (Write-Through) | Карточка мероприятия — самый частый запрос. Кеширование снимает нагрузку `SELECT` по ключу с PostgreSQL. |
-| **Виджет «Топ-10 популярных событий»** (`GET /events/top`) | `events:top10` | 5 мин | **Исключительно по TTL** | Публичный неавторизованный виджет на главной странице. Расчёт формулы по всей таблице на каждый HTTP-запрос дорог для БД. Небольшое отставание топа некритично. |
+| **Виджет «Топ-10 популярных событий»** (`GET /events/top`) | `events:top10` | 5 мин | **По TTL + сброс при мутациях** | Публичный неавторизованный виджет на главной странице. Расчёт формулы по всей таблице на каждый HTTP-запрос дорог для БД. Кеш живёт 5 мин по TTL и инвалидируется при изменении данных. |
 
 #### Обоснование выбора значений TTL:
 1. **Мероприятие (`event:{id}`) — TTL 10 минут**:
    - Является страхующим предохранителем (safety net). Даже если произойдёт непредвиденная рассинхронизация или частичный сбой при доставке сообщений, устаревшие данные автоматически вытеснятся из памяти Redis через 10 минут.
    - Защищает память Redis от бесконтрольного разрастания при появлении тысяч неактивных или архивных событий.
 2. **Топ-10 (`events:top10`) — TTL 5 минут**:
-   - Топ-10 — это рейтинговый агрегат, процент проданных мест $\frac{\text{TotalSeats} - \text{AvailableSeats}}{\text{TotalSeats}}$ меняется постепенно.
-   - Инвалидировать или пересчитывать глобальный топ при каждом единичном бронировании или отмене мест в системе нецелесообразно и создало бы чрезмерную нагрузку на CPU/БД. Обновление строго по 5-минутному TTL обеспечивает оптимальный баланс между актуальностью витрины и производительностью.
+   - Топ-10 — это рейтинговый агрегат, процент проданных мест $\frac{\text{TotalSeats} - \text{AvailableSeats}}{\text{TotalSeats}}$ меняется при бронированиях и действиях администратора.
+   - Кеширование на 5 минут защищает базу данных от наплыва неавторизованных пользователей на главной странице.
+   - При любых мутациях мероприятий (создание, изменение, удаление администратором) и при фиксации бронирования/отмены мест в Kafka ключ топа сбрасывается (`RemoveAsync`), что гарантирует моментальное обновление витрины без ожидания истечения TTL.
 
 ### 3. Обоснование выбранного подхода: «Обновление при записи» (Write-Through)
 
@@ -237,12 +238,12 @@
 
 #### Поведение при изменении данных и строгий порядок операций:
 1. **Мутирующие операции REST API (`POST /events`, `PUT /events/{id}`, `DELETE /events/{id}`)**:
-   - **Создание** (`POST /events`): сначала `await eventRepository.AddAsync(newEvent)` сохраняет событие в PostgreSQL, после чего объект сразу помещается в кеш `event:{id}` с TTL.
-   - **Обновление** (`PUT /events/{id}`): сначала `await eventRepository.UpdateAsync(existingEvent)` фиксирует изменения в PostgreSQL. Строго после успешного сохранения обновлённый `EventInfoDto` перезаписывается в кеш `event:{id}` с TTL.
-   - **Удаление** (`DELETE /events/{id}`): сначала `await eventRepository.DeleteAsync(eventToDelete)` удаляет запись из PostgreSQL. Строго после этого ключ `event:{id}` удаляется из кеша (`RemoveAsync`).
+   - **Создание** (`POST /events`): сначала `await eventRepository.AddAsync(newEvent)` сохраняет событие в PostgreSQL, после чего объект сразу помещается в кеш `event:{id}` с TTL, а кеш топа сбрасывается.
+   - **Обновление** (`PUT /events/{id}`): сначала `await eventRepository.UpdateAsync(existingEvent)` фиксирует изменения в PostgreSQL. Строго после успешного сохранения обновлённый `EventInfoDto` перезаписывается в кеш `event:{id}` с TTL, а кеш топа сбрасывается.
+   - **Удаление** (`DELETE /events/{id}`): сначала `await eventRepository.DeleteAsync(eventToDelete)` удаляет запись из PostgreSQL. Строго после этого ключ `event:{id}` и кеш топа удаляются из кеша (`RemoveAsync`).
 2. **Асинхронные события бронирования через Kafka (`BookingConfirmedConsumerService`)**:
-   - При получении сообщения **`booking-confirmed`**: сервис уменьшает `AvailableSeats`, выполняет `context.SaveChanges()` в БД, и **только после фиксации в PostgreSQL** обновляет кеш `event:{id}` актуальным числом оставшихся мест.
-   - При получении сообщения **`booking-cancelled`**: сервис освобождает места (`ReleaseSeats`), сохраняет изменения в БД через `context.SaveChanges()`, и **только после этого** обновляет кеш `event:{id}`.
+   - При получении сообщения **`booking-confirmed`**: сервис уменьшает `AvailableSeats`, выполняет `context.SaveChanges()` в БД, и **только после фиксации в PostgreSQL** обновляет кеш `event:{id}` актуальным числом оставшихся мест и сбрасывает кеш топа.
+   - При получении сообщения **`booking-cancelled`**: сервис освобождает места (`ReleaseSeats`), сохраняет изменения в БД через `context.SaveChanges()`, и **только после этого** обновляет кеш `event:{id}` и сбрасывает кеш топа.
 
 #### Почему порядок операций критически важен:
 > [!IMPORTANT]
@@ -279,9 +280,23 @@ docker compose down -v
 
 ---
 
+## Миграции базы данных
+
+В микросервисах используется подход **Code-First** на базе Entity Framework Core (PostgreSQL):
+
+- **Автоматическое применение**: при запуске каждого сервиса в `Program.cs` вызывается метод расширения `app.Services.ApplyMigrations()`, который автоматически накатывает все ожидающие миграции к соответствующей БД (`users`, `events`, `bookings`) до начала обработки HTTP-трафика.
+- **Ручное применение (CLI)**: для ручного применения или генерации новых миграций через `dotnet-ef`:
+  ```bash
+  dotnet ef database update --project services/Events/Events.Infrastructure --startup-project services/Events/Events.Presentation
+  dotnet ef database update --project services/Bookings/Bookings.Infrastructure --startup-project services/Bookings/Bookings.Presentation
+  dotnet ef database update --project services/Users/Users.Infrastructure --startup-project services/Users/Users.Presentation
+  ```
+
+---
+
 ## Запуск тестов
 
-Юнит-тесты покрывают сущности `Booking`, `Event`, логику резервирования и освобождения мест, идемпотентность подписчика, а также все сценарии кеширования в Redis (Cache Hit, Cache Miss, Write-Through обновление, инвалидацию и порядок операций):
+Юнит-тесты покрывают сущности `Booking`, `Event`, логику резервирования и освобождения мест, непосредственную идемпотентность подписчика Kafka (через вызовы реального сервиса `BookingConfirmedConsumerService` с InMemory БД), а также логику кеширования (на изолированных моках `ICacheService` и `IEventRepository`, проверяя Cache Hit, Cache Miss, Write-Through обновление, инвалидацию топа и устойчивость к сбоям БД без обращения к внешнему серверу Redis):
 
 ```bash
 dotnet test

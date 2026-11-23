@@ -16,6 +16,8 @@ public class RedisCacheService(
 
     public async Task<T?> GetAsync<T>(string key, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         try
         {
             var db = redis.GetDatabase();
@@ -28,6 +30,10 @@ public class RedisCacheService(
 
             return JsonSerializer.Deserialize<T>((string)value!, SerializerOptions);
         }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
             logger.LogError(ex, "Failed to get value from cache for key '{Key}'", key);
@@ -37,11 +43,17 @@ public class RedisCacheService(
 
     public async Task SetAsync<T>(string key, T value, TimeSpan? ttl = null, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         try
         {
             var db = redis.GetDatabase();
             var json = JsonSerializer.Serialize(value, SerializerOptions);
             await db.StringSetAsync(key, json, ttl);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception ex)
         {
@@ -51,10 +63,16 @@ public class RedisCacheService(
 
     public async Task RemoveAsync(string key, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         try
         {
             var db = redis.GetDatabase();
             await db.KeyDeleteAsync(key);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception ex)
         {

@@ -17,9 +17,12 @@ public class BookingConfirmedConsumerService(
     IServiceScopeFactory scopeFactory,
     IOptions<KafkaConsumerOptions> options,
     IProducer<string, string> producer,
+    ICacheService cacheService,
+    IOptions<RedisOptions> redisOptions,
     ILogger<BookingConfirmedConsumerService> logger) : BackgroundService
 {
     private readonly KafkaConsumerOptions _options = options.Value;
+    private readonly RedisOptions _redisOptions = redisOptions.Value;
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -107,6 +110,12 @@ public class BookingConfirmedConsumerService(
         }
     }
 
+    internal Task HandleBookingConfirmedMessageAsync(string messageJson, CancellationToken cancellationToken = default) =>
+        ProcessBookingConfirmedAsync(messageJson, cancellationToken);
+
+    internal Task HandleBookingCancelledMessageAsync(string messageJson, CancellationToken cancellationToken = default) =>
+        ProcessBookingCancelledAsync(messageJson, cancellationToken);
+
     private async Task ProcessBookingConfirmedAsync(string messageJson, CancellationToken cancellationToken)
     {
         BookingConfirmed? bookingEvent;
@@ -183,7 +192,7 @@ public class BookingConfirmedConsumerService(
             "Reduced {Seats} available seat(s) for event {EventId} ({Title}) after confirming booking {BookingId}. Remaining: {RemainingSeats}",
             seatsToReserve, eventEntity.Id, eventEntity.Title, bookingEvent.BookingId, eventEntity.AvailableSeats);
 
-        await UpdateEventCacheAsync(scope.ServiceProvider, eventEntity, cancellationToken);
+        await UpdateEventCacheAsync(eventEntity, cancellationToken);
     }
 
     private async Task ProcessBookingCancelledAsync(string messageJson, CancellationToken cancellationToken)
@@ -227,24 +236,22 @@ public class BookingConfirmedConsumerService(
                 "Released {Seats} seat(s) for event {EventId} after cancellation of booking {BookingId}. Remaining: {RemainingSeats}",
                 seatsToRelease, eventEntity.Id, cancelledEvent.BookingId, eventEntity.AvailableSeats);
 
-            await UpdateEventCacheAsync(scope.ServiceProvider, eventEntity, cancellationToken);
+            await UpdateEventCacheAsync(eventEntity, cancellationToken);
         }
     }
 
-    private async Task UpdateEventCacheAsync(IServiceProvider serviceProvider, Event eventEntity, CancellationToken cancellationToken)
+    private async Task UpdateEventCacheAsync(Event eventEntity, CancellationToken cancellationToken)
     {
         try
         {
-            var cacheService = serviceProvider.GetService<ICacheService>();
-            if (cacheService == null)
-            {
-                return;
-            }
-
-            var redisOptions = serviceProvider.GetService<IOptions<RedisOptions>>()?.Value ?? new RedisOptions();
-            var ttl = TimeSpan.FromMinutes(redisOptions.EventTtlMinutes);
+            var ttl = TimeSpan.FromMinutes(_redisOptions.EventTtlMinutes);
             var dto = EventInfoDto.FromEvent(eventEntity);
             await cacheService.SetAsync(EventCacheKeys.Event(eventEntity.Id), dto, ttl, cancellationToken);
+            await cacheService.RemoveAsync(EventCacheKeys.Top10, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception ex)
         {

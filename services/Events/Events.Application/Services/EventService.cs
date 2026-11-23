@@ -40,7 +40,7 @@ public class EventService(
 
     public async Task<IReadOnlyList<EventInfoDto>> GetTopPopularEventsAsync(int count = 10)
     {
-        var cacheKey = EventCacheKeys.Top10;
+        var cacheKey = EventCacheKeys.Top(count);
         var cached = await cacheService.GetAsync<List<EventInfoDto>>(cacheKey);
         if (cached is not null)
         {
@@ -93,6 +93,7 @@ public class EventService(
         var dto = EventInfoDto.FromEvent(newEventEntity);
         var ttl = TimeSpan.FromMinutes(_options.EventTtlMinutes);
         await cacheService.SetAsync(EventCacheKeys.Event(newEventEntity.Id), dto, ttl);
+        await cacheService.RemoveAsync(EventCacheKeys.Top10);
 
         return dto;
     }
@@ -120,6 +121,7 @@ public class EventService(
         var dto = EventInfoDto.FromEvent(existingEvent);
         var ttl = TimeSpan.FromMinutes(_options.EventTtlMinutes);
         await cacheService.SetAsync(EventCacheKeys.Event(id), dto, ttl);
+        await cacheService.RemoveAsync(EventCacheKeys.Top10);
 
         return dto;
     }
@@ -135,5 +137,6 @@ public class EventService(
 
         await eventRepository.DeleteAsync(eventToDelete);
         await cacheService.RemoveAsync(EventCacheKeys.Event(id));
+        await cacheService.RemoveAsync(EventCacheKeys.Top10);
     }
 }
