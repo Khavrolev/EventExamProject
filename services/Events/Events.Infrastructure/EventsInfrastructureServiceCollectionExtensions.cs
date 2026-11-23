@@ -1,5 +1,6 @@
 using Confluent.Kafka;
 using Events.Application.Abstractions;
+using Events.Application.Common;
 using Events.Infrastructure.Caching;
 using Events.Infrastructure.Messaging;
 using Events.Infrastructure.Persistence;
@@ -22,6 +23,7 @@ public static class EventsInfrastructureServiceCollectionExtensions
             options.UseNpgsql(configuration.GetConnectionString("DefaultConnection")));
 
         services.Configure<KafkaConsumerOptions>(configuration.GetSection(KafkaConsumerOptions.SectionName));
+        services.Configure<RedisOptions>(configuration.GetSection(RedisOptions.SectionName));
 
         services.AddSingleton<IProducer<string, string>>(sp =>
         {

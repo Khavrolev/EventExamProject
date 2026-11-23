@@ -20,6 +20,14 @@ public class EventsController(IEventService eventService) : ControllerBase
         return Ok(result);
     }
 
+    [HttpGet("top")]
+    [ProducesResponseType(typeof(IReadOnlyList<EventInfoDto>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<IReadOnlyList<EventInfoDto>>> GetTopEvents()
+    {
+        var topEvents = await eventService.GetTopPopularEventsAsync();
+        return Ok(topEvents);
+    }
+
     [HttpGet("{id:Guid}")]
     [ProducesResponseType(typeof(EventInfoDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
